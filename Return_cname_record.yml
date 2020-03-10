@@ -1,0 +1,23 @@
+  - name: Return the host name assigned to the CNAME
+    uri:
+      url: "https://{{nios_provider['host']}}//wapi/v2.7.1/record:cname?name={{nios_cname_alias|lower}}.{{zone}}"
+      method: GET
+      user: "{{ infoblox_user }}"
+      xxx: "{{ infoblox_pass }}"
+      force_basic_auth: yes
+      status_code: 200
+      validate_certs: no
+    register: hostname
+    when: "cname.msg is defined and 'already' in cname.msg"
+
+  - debug:
+      msg: "{{ hostname['json'][0]['canonical'] }}"
+    when: "cname.msg is defined  and 'already' in cname.msg"
+
+  - set_fact:
+      host: "{{ hostname['json'][0]['canonical']|upper }}"
+    when: "cname.msg is defined  and 'already' in cname.msg"
+
+  - fail:
+      msg: "CNAME {{nios_cname_alias}}.baba.internal is already assigned to hostname {{ host }}"
+    when: ("cname.msg is defined) and ('already' in cname.msg") and (host is defined) and (nios_canonical_name|upper != host)
