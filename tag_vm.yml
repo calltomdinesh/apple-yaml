@@ -1,0 +1,57 @@
+- name: Set category_id for SY6
+    set_fact: 
+      category_id: 'urn:vmomi:InventoryServiceCategory:4dda8eae-6e93-48e7-a2be-a5780fa3f83c:GLOBAL'
+    when: datacenter_name == 'SY6' and environment_type == 'xxx'
+
+  - name: Set category_id for SY7
+    set_fact: 
+      category_id: 'urn:vmomi:InventoryServiceCategory:a71be5ce-1d54-4190-8e01-3f5ff9a51702:GLOBAL'
+    when: datacenter_name == 'SY7' and environment_type == 'xxx'
+
+  - name: Set category_id for SY6
+    set_fact: 
+      category_id: 'urn:vmomi:InventoryServiceCategory:83a227d4-ce96-4f2b-b893-a904d5285108:GLOBAL'
+    when: datacenter_name == 'SY6' and environment_type == 'nonxxx'
+
+  - name: Set category_id for SY7
+    set_fact: 
+      category_id: 'urn:vmomi:InventoryServiceCategory:6545e547-8cf0-44b0-ae1e-ab70837bc4a0:GLOBAL'
+    when: datacenter_name == 'SY7' and environment_type == 'nonxxx'
+
+  - name: Set category_id for SY6
+    set_fact: 
+      category_id: 'urn:vmomi:InventoryServiceCategory:ed452bc8-b5f9-4f5f-886e-b2bd719d0a99:GLOBAL'
+    when: datacenter_name == 'SY6' and environment_type == 'lab'
+
+  - name: Set category_id for SY7
+    set_fact: 
+      category_id: 'urn:vmomi:InventoryServiceCategory:a71be5ce-1d54-4190-8e01-3f5ff9a51702:GLOBAL'
+    when: datacenter_name == 'SY7'  and environment_type == 'lab'
+
+  - name: Create tags
+    vmware_tag:
+      hname: '{{ vcenter_hname }}'
+      uname: '{{ vcenter_uname }}'
+      pword: '{{ vcenter_pword }}'
+      validate_certs: no
+      category_id: "{{ category_id }}"
+      tag_name: "{{ item.0 | lower }}"
+      tag_description: "{{ item.1 }}"
+      state: present  
+    delegate_to: localhost
+    with_together: 
+      - "{{ vm_tag_name.split(',')|replace(' ','') }}"
+      - "{{ vm_tag_desc.split(',')|replace(' ','') }}"    
+
+  - name: Add tags to VM
+    vmware_tag_manager:
+      hname: '{{ vcenter_hname }}'
+      uname: '{{ vcenter_uname }}'
+      pword: '{{ vcenter_pword }}'
+      validate_certs: no
+      tag_names: "{{ item | lower}}"
+      object_name: "{{ vmcreate_vm_name }}"
+      object_type: VirtualMachine
+      state: add    
+    delegate_to: localhost
+    with_items: "{{ vm_tag_name.split(',')|replace(' ','') }}"
