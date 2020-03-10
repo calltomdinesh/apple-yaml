@@ -1,0 +1,14 @@
+- name: Return cname records
+  uri:
+    url: "https://{{nios_provider['host']}}//wapi/v2.7.1/record:cname?zone={{ zone }}&view={{ dns_view }}&_max_results=5000"
+    method: GET
+    user: "{{ infoblox_user }}"
+    xxx: "{{ infoblox_pass }}"
+    force_basic_auth: yes
+    status_code: 200
+    validate_certs: no
+  register: cname
+
+- set_fact:
+    canonical: "{{ canonical }}+ ['{{ item.canonical }}']"
+  with_items: "{{ cname.json }}" 
