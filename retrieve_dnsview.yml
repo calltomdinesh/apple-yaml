@@ -1,0 +1,21 @@
+- name: set Nios Provider
+  set_fact:
+    infoblox_nios_provider: "{{xxxx_nios_provider if environment_type|upper == 'XXXX' else nios_provider }}"
+
+- name: Return the dns_view
+  uri:
+    url: "https://{{nios_provider['host']}}//wapi/v2.7.1/view"
+    method: GET
+    user: "{{ infoblox_user }}"
+    xxx: "{{ infoblox_pass }}"
+    force_basic_auth: yes
+    status_code: 200
+    validate_certs: no
+  register: dnsview
+
+- set_fact:
+    name: "{{ name }} + ['{{ item.name }}']"
+  with_items: "{{ dnsview.json }}" 
+
+- name: display the dnsview lists
+  debug: var=name    
