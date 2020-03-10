@@ -1,0 +1,18 @@
+  tasks:
+    - name: Settxxx nonxxx vcenter
+      set_fact:
+        vcenter_hname: "np{{ datacenter_name }}vcenter01.au.xxx.net"
+
+    - name: Gather facts for the VMs in desired region
+      vmware_gather_facts_xxx:
+        hname: '{{ vcenter_hname }}'
+        uname: '{{ vcenter_uname }}'
+        pword: '{{ vcenter_pword }}'
+        validate_certs: 'no'
+        folder_name: '{{ region }}'
+      register: vm_list
+    
+    - name: Display vm details
+      debug:
+        msg: "{{ vm_list.virtual_machines }}"
+      when: vm_list.virtual_machines is defined
