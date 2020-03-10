@@ -1,0 +1,19 @@
+- name: Gather Facts vmware infoblox
+      vmware_infoblox_gatherfacts_baba:
+        hname: '{{ vcenter_hname }}'
+        uname: '{{ vcenter_uname }}'
+        pword: '{{ vcenter_pword }}'
+
+        nios_host : "{{ infoblox_nios_provider['host'] }}"
+        nios_uname : "{{ infoblox_nios_provider['uname'] }}"
+        nios_pword : "{{ infoblox_nios_provider['pword'] }}"
+        nios_network : "{{vm_infblx_network}}"
+        nios_view : "XXX-NL-BE"
+        nios_zone : "au.xxx.net"
+        vm_name : "{{ vm_name}}"
+        folder: "{{ vm_folder }}"
+        infblx_ipaddr: "{{infblx_ipaddr}}"
+      register: vmfacts
+    - debug:
+        msg:
+          - "{{vmfacts}}"
