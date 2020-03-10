@@ -1,0 +1,38 @@
+- name: Get info about tag
+      vmware_get_vms_by_tag:
+        hname: '{{ vcenter_hname }}'
+        uname: '{{ vcenter_uname }}'
+        pword: '{{ vcenter_pword }}'
+        validate_certs: no
+        category_name: '{{ item.0 }}'
+        tag_name: '{{ item.1 }}'
+      with_together:
+        - "{{ vm_category_list }}"
+        - "{{ vm_tag_list }}" 
+      delegate_to: localhost
+      register: tag_info
+
+    - debug:
+        msg: "{{ tag_info.results }}"
+
+    - set_fact:
+        final_list: "{{ final_list|default(tag_info.results.0.vm_list)|intersect(tag_info.results[item].vm_list) }}"
+      loop: "{{ range(1, tag_info.results|length, 1)|list }}"
+          
+
+    - name: Create DRS Anti Affinity Rule for VM-VM
+      vmware_vm_vm_drs_rule:
+        hname: "{{ vcenter_hname }}"
+        uname: "{{ vcenter_uname }}"
+        pword: "{{ vcenter_pword }}"
+        cluster_name: "{{ datacenter_name }}-{{ cluster_name }}"
+        validate_certs: no
+        vms: "{{ final_list }}"
+        drs_rule_name: "{{ rule_name }}"
+        enabled: True
+        mandatory: True
+        affinity_rule: "{{ action_type }}" 
+      delegate_to: localhost
+      register: rule_creation
+      when: final_list|default([])|length > 0
+     
