@@ -1,0 +1,41 @@
+---
+- hosts: localhost
+  gather_facts: false
+  
+  vars:
+    satelliteurl: npsy6satellite01.au.xxx.net
+    satellite_uname: admin
+    satellite_pwd: redhat
+
+  tasks:
+
+  - set_fact:
+        vm_name: "{{ hnames.split(',') }}"
+  
+  - name: get host ID for given host from satellite
+    uri:
+      url: https://{{ satelliteurl }}/api/v2/hosts/{{ item }}
+      method: GET 
+      user: "{{ satellite_uname }}"
+      pword: "{{ satellite_pwd }}"
+      force_basic_auth: yes 
+      validate_certs: no
+    register: restdata
+    with_items: "{{ vm_name }}"
+    
+
+  - name: delete host from satellite
+    uri:
+      url: https://{{ satelliteurl }}/api/v2/hosts/{{ item }}
+      method: DELETE
+      return_content: yes
+      user: "{{ satellite_uname }}"
+      pword: "{{ satellite_pwd }}"
+      force_basic_auth: yes
+      validate_certs: no
+      follow_redirects: all
+      headers:
+        Accept: "application/json,version=2"
+        Content-Type: "application/json"
+    register: restdata1
+    with_items: "{{ vm_name }}"
