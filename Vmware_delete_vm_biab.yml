@@ -1,0 +1,26 @@
+- hosts: localhost
+  gather_facts: false
+  vars_files:
+    - roles/ansible_role_variables/xxxs/{{ environment_type|lower }}.yml
+    - roles/ansible_role_variables/vars/{{ environment_type|lower }}.yml
+  tasks:
+  - set_fact: vcenter_domain='{{datacenter_name}}vcenter01.au.xxx.net'
+  - set_fact: vcenter_hname="{{'p'+vcenter_domain if environment_type == 'xxx' else 'np'+vcenter_domain if environment_type == 'nonxxx' else 'l'+vcenter_domain if environment_type == 'lab' }}"
+  - name: Biab Delete vm 
+    vmware_delete_vm_biab:
+      hname: '{{ vcenter_hname }}'
+      uname: '{{ vcenter_uname }}'
+      pword: '{{ vcenter_pword }}'
+      vm_name : '{{vm_name}}'
+      folder : '{{vm_folder}}'
+    register: vmfacts
+    when: 
+      - delete_failed_vm is not defined or 
+        delete_failed_vm|bool == true 
+    
+  - name: Delete host record
+    import_role:
+      name: ansible_role_inflobox
+      tasks_from: delete_host_record_biab
+  - fail:
+      msg: BIAB VM Deployment Failed
