@@ -1,0 +1,53 @@
+---
+- name: Set values for search
+  set_fact:
+    vm_networks_data: "{{ vm_networks.split('-') }}"
+- name: Set values for infoblox
+  set_fact:
+    zone: "{{ vm_networks_data[0] }}"
+    subzone: "{{ vm_networks_data[1] }}"
+    vlan_app: "{{ vm_networks_data[-1] if vm_networks_data| length == 3 else vm_networks_data[2:]|join('-') }}"
+    state: "used"
+- name: Set values for search
+  set_fact:
+    vlan_name: "{{ zone|upper}}-{{ subzone|upper}}-{{vlan_app|upper}}"
+    state: "used"
+- name: Set filter for extra attrs
+  set_fact:
+    extattrs_filter:
+      #State: "{{state|upper}}"
+      Subnet_name: "{{vlan_name|upper}}"
+      Site: "{{datacenter_name}}"
+- name: set Nios Provider
+  set_fact:
+    infoblox_nios_provider: "{{xxxx_nios_provider if environment_type|upper == 'XXXX' else nios_provider }}"
+- name: Get network info
+  set_fact: 
+    network_info: "{{ lookup('nios', 'network',wantlist=True,extattrs=extattrs_filter,return_fields=['extattrs','network','comment'],provider=infoblox_nios_provider ) }}"
+  register: network_info
+- name: network Info
+  fail: msg="Check network for Network IPs"
+  when: network_info|length == 0
+  
+- name: Passxxx data for next playbook
+  set_stats:
+    data:
+      zone: "{{ zone }}"
+      subzone: "{{ subzone }}"
+      vlan_app: "{{ vlan_app }}"
+      data:
+        networkaddr_infoblox: "{{ network_info[0]['network'] }}"
+        comment: "{{ network_info[0]['comment'] }}"
+        extattrs:
+          #state: "{{ network_info[0]['extattrs']['State'] }}"
+          site: "{{ network_info[0]['extattrs']['Site'] }}"
+          #location: "{{ network_info[0]['extattrs']['Location'] }}"
+          #when: "'Location' in {{network_info[0]['extattrs'].keys()}}"
+          vlan_name: "{{network_info[0]['extattrs']['Subnet_name'] }}"
+          subnetlength: "{{ network_info[0]['network'].split('/')[-1] }}"
+          vlan_id_infoblox: "{{network_info[0]['extattrs']['VLAN']|int}}"
+  
+#          portgroup_name: "{{network_info[0]['extattrs']['PGName']}}"
+- debug:
+      msg: 
+        - "{{ network_info }}"
