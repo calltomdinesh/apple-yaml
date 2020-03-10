@@ -1,0 +1,44 @@
+---
+- hosts: localhost
+  gather_facts: false
+
+  vars_files:
+    - xxxs_nonxxx.yml
+  
+  vars:
+    ipa_user: ipa_enroll
+    ipa_hostgroup: opera_host_grp
+    ipaservers:
+      au: ['psy6ipa01.idm.au.intranet','psy7ipa01.idm.au.xxxx.intranet']
+      dmzau: ['psy6dmzipa01.idm.dmzau.xxxx.intranet','psy7dmzipa01.ipa.dmzau.xxxx.intranet']
+      tau: ['npsy6ipa01.idm.tau.xxxx.intranet']
+    ipa_servers: "{{ ipaservers[req_domain] }}"
+    ipa_host:  "{{ ipaservers[req_domain][0] }}"    
+
+  tasks:
+
+  - name: Set fact for ipa servers required domain
+    set_fact:
+      req_domain: "{{ vm_name_fqdn.split('.')[1] }}"
+
+  - name: remove host from IPA hostgroup
+    ipa_hostgroup:
+      name: "{{ ipa_hostgroup }}"
+      state: absent
+      host: "{{ vm_name_fqdn }}"
+      ipa_host: "{{ ipa_host }}"
+      ipa_user: "{{ ipa_user }}"
+      ipa_pass: "{{ ipa_pword }}"
+      validate_certs: no
+    when: ipa_hostgroup is defined
+
+  - name:  remove host from IPA hostgroup
+    ipa_host:
+      name: "{{ vm_name_fqdn }}"
+      state: absent    
+      ipa_host: "{{ ipa_host }}"
+      ipa_user: "{{ ipa_user }}"
+      ipa_pass: "{{ ipa_pword }}"
+      validate_certs: no
+    register: remove_vm
+
