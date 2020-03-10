@@ -1,0 +1,54 @@
+---
+- hosts: localhost
+  gather_facts: false
+
+  vars:
+    ntx_clusters:
+      sy6-nxxx-a: sy6-nxxx-a-cl01.au.xxx.net
+      sy6-nxxx-b: sy6-nxxx-b-cl02.au.xxx.net
+      sy7-nxxx-a: sy7-nxxx-a-cl01.au.xxx.net
+      sy7-nxxx-b: sy7-nxxx-b-cl02.au.xxx.net
+      sy6-xxx-a: sy6-xxx-a-cl01.au.xxx.net
+      sy6-xxx-b: sy6-xxx-b-cl02.au.xxx.net
+      sy7-xxx-a: sy7-xxx-a-cl01.au.xxx.net
+      sy7-xxx-b: sy7-xxx-b-cl02.au.xxx.net
+    ntx_cluster: "{{ ntx_clusters[datacenter|lower+'-'+env_type|lower+'-'+site|lower] }}"
+
+  vars_files:
+    - xxxs_{{ environment_type }}.yml
+
+  tasks:
+    - set_fact:
+        nutanix_uname: "{{ nutanix_xxx_uname if environment_type == 'xxx' else nutanix_np_uname if environment_type == 'nonxxx' }}"
+        nutanix_pword: "{{ nutanix_xxx_pword if environment_type == 'xxx' else nutanix_np_pword if environment_type == 'nonxxx' }}"
+
+    - set_fact:
+        env_type: "{{ 'nxxx' if environment_type == 'nonxxx' else 'xxx' if environment_type == 'xxx' }}"
+
+    - set_fact:
+        vms: "{{ vm_names.split(',') }}"
+      when: (',' in vm_names)
+
+    - name: Manage multiple VMs in the required protection domain
+      nutanix_manage_pd_vms:
+        hname: '{{ ntx_cluster }}'
+        uname: '{{ nutanix_uname }}'
+        pword: '{{ nutanix_pword }}'
+        domain_name: '{{ domain_name }}'
+        vm_name: '{{ item }}'
+        state: '{{ operation }}'
+      loop: "{{ vms }}"
+      when: (',' in vm_names)
+      register: output
+
+    - name: Manage VM in the required protection domain
+      nutanix_manage_pd_vms:
+        hname: '{{ ntx_cluster }}'
+        uname: '{{ nutanix_uname }}'
+        pword: '{{ nutanix_pword }}'
+        domain_name: '{{ domain_name }}'
+        vm_name: '{{ vm_names }}'
+        state: '{{ operation }}'
+      when: not(',' in vm_names)
+      register: output
+
