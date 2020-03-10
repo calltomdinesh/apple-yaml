@@ -1,0 +1,89 @@
+- set_fact: datacenter_name="{{cluster_name.split('-')[0]|lower}}"
+    - set_fact: environment_type="{{cluster_name.split('-')[1]|lower}}"
+    - set_fact: vcenter_domain='{{datacenter_name}}vcenter01.au.xxx.net'
+    - set_fact: vcenter_hname="{{'p'+vcenter_domain if environment_type == 'xxx' else 'np'+vcenter_domain if (environment_type == 'nonxxx' or environment_type == 'nxxx') else 'l'+vcenter_domain if environment_type == 'lab' }}"
+    - set_fact: clean_nic="{{clean_nic_info|default(false|bool)}}"
+    - set_fact: vmuser_dc='BABA\xxxadmin'
+    - set_fact: dc_hname='BABAZTDC01'
+    - fail:
+        msg: "Provide uname and pword since you have enabled clean nic info"
+      when:
+        - clean_nic_info|bool == true
+        - vm_uname is not defined or
+          vm_pword is not defined or
+          vm_uname is defined and vm_uname == '' or
+          vm_pword is defined and vm_pword == ''
+
+    - name: Creatxxx Snapshot for BABA with Clear Nic info
+      vmware_folder_clean_nic:
+        hname: "{{ vcenter_hname }}"
+        uname: "{{ vcenter_uname }}"
+        pword: "{{ vcenter_pword }}"
+        parent_folder : "{{parent_folder}}"
+        folder : "{{folder}}"
+       
+        vmuser: "{{vm_uname}}"
+        vmpword: "{{vm_pword}}"
+        clean_nic_info: "{{clean_nic_info|default(false|bool) }}"
+        vmuser_dc: "{{vmuser_dc}}"
+        dc_hname: "{{dc_hname}}"
+
+      register: snapshot_status
+    - name: Response
+      debug:
+        msg:
+          - '{{ snapshot_status }}'
+
+Vmware_gather_facts.yml
+
+- block:
+      - name: Gather all registered virtual machines
+        vmware_vm_facts:
+          hname: '{{ vcenter_hname }}'
+          uname: '{{ vcenter_uname }}'
+          pword: '{{ vcenter_pword }}'
+          validate_certs: no
+        register: vmfacts
+    rescue:
+      - name: Send email
+        mail:
+          host: xxxsmtpgw.au.xxxx.intranet
+          port: 25
+          subject: "CreateVM – Failure – JobId# {{ tower_workflow_job_id }} – VMName# {{ vm_name | upper }}"
+          to: "{{ tower_user_first_name }}.{{ tower_user_last_name }}@xxx.com.au"
+          from: "Ansible Tower@xxx.com.au"
+          secure: never
+          body: |
+            VMware gather facts failed, Please check
+            JOB URL: "https://ansibleweb/#/workflows/{{ tower_workflow_job_id }}"
+
+        delegate_to: localhost
+
+      - fail:
+          msg: Gather Facts failed, please check
+    
+
+  - name: Create Empty Lists for VMware Virtual Machines
+    set_fact:
+       list_vms: []
+       list_ips: []
+
+  - name: Append VMWare Guest to list
+    set_fact:
+      list_vms: "{{ list_vms }} + [ '{{ item.guest_name | upper  }}']"
+    with_items: "{{ vmfacts.virtual_machines }}"
+
+  - name: Append VM Ips to the list
+    set_fact:
+      list_ips: "{{ list_ips }} + [ '{{ item.ip_address }}']"
+    with_items: "{{ vmfacts.virtual_machines }}"
+
+  - name: Passxxx data for next playbook
+    set_stats:
+      data:
+        list_ips: "{{ list_ips }}"
+
+  - fail:
+     msg: Host exists on VMware already . Enter new Hname  
+    when: vmcreate_vm_name in list_vms
+
