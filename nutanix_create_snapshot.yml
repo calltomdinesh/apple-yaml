@@ -1,0 +1,155 @@
+---
+- hosts: localhost
+  gather_facts: false
+
+  vars:
+    slave_cluster_names: []
+    nutanix_xxx_clusters:
+      - sy6-xxx-a-cl01.au.xxx.net
+      - sy6-xxx-b-cl02.au.xxx.net
+      - sy7-xxx-a-cl01.au.xxx.net
+      - sy7-xxx-b-cl02.au.xxx.net
+    nutanix_np_clusters:
+      - sy6-nxxx-a-cl01.au.xxx.net
+      - sy6-nxxx-b-cl02.au.xxx.net
+      - sy7-nxxx-a-cl01.au.xxx.net
+      - sy7-nxxx-b-cl02.au.xxx.net
+
+  vars_files:
+    - xxxs_{{ environment_type }}.yml
+
+  tasks:
+    - name: Settxxx nonxxx vcenter
+      set_fact:
+        vcenter_host: "np{{ datacenter_name }}vcenter01.au.xxx.net"
+
+    - name: Checkxxx if there are any restored VMs present
+      vmware_list_folder:
+        hname: '{{ vcenter_host }}'
+        uname: '{{ vcenter_uname }}'
+        pword: '{{ vcenter_pword }}'
+        validate_certs: 'no'
+        folder_name: 'Discovered virtual machine'
+      register: restore_list
+
+    - name: Fail if there are restored VMs present already
+      fail:
+        msg: "There are restored VMs present in vcenter under 'Discovered virtual machine' folder. Please move or delete the same before proceedxxx with the another restore."
+      when: (restore_list.virtual_machines | select('match', 'Nutanix-Clone-.*') | list | count > 0)
+
+    - name: Stop - Required BIAB region
+      vmware_region_powerstate_xxx:
+        hname: '{{ vcenter_host }}'
+        uname: '{{ vcenter_uname }}'
+        pword: '{{ vcenter_pword }}'
+        validate_certs: 'no'
+        folder_name: '{{ region }}'
+        powerstate: stop
+      register: vm_list
+
+    - name: Listxxx vms of provided region
+      vmware_list_folder:
+        hname: '{{ vcenter_host }}'
+        uname: '{{ vcenter_uname }}'
+        pword: '{{ vcenter_pword }}'
+        validate_certs: 'no'
+        folder_name: '{{ region }}'
+      register: vm_list
+
+    - set_fact:
+        vm_count: "{{ vm_list.virtual_machines | length - 1 }}"
+
+    - name: Set required nutanix clusters
+      set_fact:
+        nutanix_clusters: "{{ nutanix_xxx_clusters if environment_type == 'xxx' else nutanix_np_clusters if environment_type == 'nonxxx' }}"
+        nutanix_uname: "{{ nutanix_xxx_uname if environment_type == 'xxx' else nutanix_np_uname if environment_type == 'nonxxx' }}"
+        nutanix_pword: "{{ nutanix_xxx_pword if environment_type == 'xxx' else nutanix_np_pword if environment_type == 'nonxxx' }}"
+
+    - name: checkxxx domain info
+      nutanix_manage_protection_domain:
+        hname: '{{ item }}'
+        uname: '{{ nutanix_uname }}'
+        pword: '{{ nutanix_pword }}'
+        domain_name: '{{ domain_name }}'
+        operation: info
+      register: domain_info
+      loop: '{{ nutanix_clusters }}'
+
+    - name: Set master cluster host and name
+      set_fact:
+        master_cluster_host: "{{ (domain_info.results | selectattr('domain_info.Cluster_State', 'search', '^ACTIVE') | list)[0].item }}"
+        master_cluster_name: "{{ (domain_info.results | selectattr('domain_info.Cluster_State', 'search', '^ACTIVE') | list)[0].item.split('.')[0] | upper }}"
+
+    - name: Set slave cluster hosts
+      set_fact:
+        slave_cluster_hosts: "{{ domain_info | json_query(server_name_cluster_host_query) }}"
+      vars:
+        server_name_cluster_host_query: "results[?domain_info.Cluster_State == 'PASSIVE'].item"
+
+    - name: Set slave cluster names
+      set_fact:
+        slave_cluster_names: "{{ slave_cluster_names }} + ['{{ item.split('.')[0] | upper }}']"
+      loop: "{{ slave_cluster_hosts }}"
+
+    - name: creatxxx snapshot on the master cluster
+      nutanix_manage_pd_snapshots:
+        hname: '{{ master_cluster_host }}'
+        uname: '{{ nutanix_uname }}'
+        pword: '{{ nutanix_pword }}'
+        domain_name: '{{ domain_name }}'
+        operation: create
+      register: snap_create
+
+    - set_fact:
+        snap_create_time: "{{ '%Y-%m-%d %H:%M:%S' | strftime(snap_create.snap_create_info.schedule_start_time_usecs/1000000) }}"
+
+    - name: listxxx snapshots
+      nutanix_manage_pd_snapshots:
+        hname: '{{ master_cluster_host }}'
+        uname: '{{ nutanix_uname }}'
+        pword: '{{ nutanix_pword }}'
+        domain_name: '{{ domain_name }}'
+        operation: list
+      register: snap_list
+      until: ((snap_list.snap_list | selectattr('snap_time', 'search', '^latest') | list)[0].snap_time.split('(')[1].split(')')[0] ) >= snap_create_time
+      retries: 5
+      delay: 5
+
+    - name: Set the latest master snap
+      set_fact:
+        latest_snap: "{{ snap_list.snap_list | selectattr('snap_time', 'search', '^latest') | list}}"
+
+    - name: Set the latest slave snap
+      set_fact:
+        latest_slave_snap: "{{ master_cluster_name }}:{{ latest_snap[0].snap_id }}"
+
+    - name: checkxxx if the snapshot is available on all the sites
+      nutanix_manage_pd_snapshots:
+        hname: '{{ item }}'
+        uname: '{{ nutanix_uname }}'
+        pword: '{{ nutanix_pword }}'
+        domain_name: '{{ domain_name }}'
+        operation: list
+      register: snap_avail
+      until: latest_snap[0].snap_id in ((snap_avail.snap_list | selectattr('snap_time', 'search', '^latest') | list)[0].snap_id)
+      retries: 20
+      delay: 10
+      loop: '{{ nutanix_clusters }}'
+
+    - name: Restore snapshots
+      include_tasks: nutanix_restore_snapshot.yml
+      loop:
+        - {host: '{{ master_cluster_host }}', id: '{{ latest_snap[0].snap_id }}'}
+        - {host: '{{ slave_cluster_hosts[0] }}', id: '{{ latest_slave_snap }}'}
+        - {host: '{{ slave_cluster_hosts[1] }}', id: '{{ latest_slave_snap }}'}
+        - {host: '{{ slave_cluster_hosts[2] }}', id: '{{ latest_slave_snap }}'}
+
+    - name: Start - Required BIAB region
+      vmware_region_powerstate_xxx:
+        hname: '{{ vcenter_host }}'
+        uname: '{{ vcenter_uname }}'
+        pword: '{{ vcenter_pword }}'
+        validate_certs: 'no'
+        folder_name: '{{ region }}'
+        powerstate: start
+      register: vm_list
