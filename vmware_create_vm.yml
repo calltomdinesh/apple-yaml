@@ -1,0 +1,287 @@
+---
+- hosts: localhost
+  gather_facts: false
+
+  vars_files:
+    - xxxs_{{ environment_type }}.yml
+
+  tasks:
+  - name: Settxxx xxx vcenter
+    set_fact:
+      vcenter_hname: "p{{ datacenter_name }}vcenter01.au.xxx.net"
+    when: environment_type == 'xxx'
+
+  - name: Settxxx nonxxx vcenter
+    set_fact:
+      vcenter_hname: "np{{ datacenter_name }}vcenter01.au.xxx.net"
+    when: environment_type == 'nonxxx'
+
+  - name: Settxxx nonxxx vcenter
+    set_fact:
+      vcenter_hname: "l{{ datacenter_name }}vcenter01.au.xxx.net"
+    when: environment_type == 'lab'
+
+  - block:
+      - name: Create VM
+        import_role:
+          name: ansible_role_vm_create
+
+    rescue:
+      - name: Delete VM
+        import_role:
+          name: ansible_role_vm_create
+          tasks_from: vm_delete
+        ignore_errors: true  
+      - name: Delete Host Record
+        import_role:
+          name: ansible_role_inflobox
+          tasks_from: delete_host_record
+        ignore_errors: true            
+      - name: Send email
+        mail:
+          host: xxx.au.xxxx.intranet
+          port: 25
+          subject: "CreateVM – Failure – JobId# {{ tower_workflow_job_id }} – VMName# {{ vm_name | upper }}"
+          to: "{{ tower_user_first_name }}.{{ tower_user_last_name }}@xxx.com.au"
+          from: "Ansible Tower@xxx.com.au"
+          secure: never
+          body: |
+            JOB URL: "https://ansibleweb/#/workflows/{{ tower_workflow_job_id }}"
+            VM NAME:   {{ vm_name | upper }} 
+            VM IP:     {{ infblx_ipaddr_def }}
+            NETAMSK: {{ vm_networks_netmask_def }}
+            GATEWAY: {{ vm_networks_gateway_def }}
+            VM FQDN:   {{ vm_name }}.{{ vm_domain_name }}
+            CLUSTER:   {{ vm_cluster }}
+            DATA CENTER:   {{ datacenter_name }}
+            OS:        {{ vm_template.split('-')[0] }}
+
+        delegate_to: localhost
+      - name: Failure detected while creatxxx VM
+        fail:
+          msg: "Create VM failed"
+        delegate_to: localhost
+
+- name: Create and configure windows VM
+  hosts: newvm
+  gather_facts: false
+
+  vars_files:
+    - xxxs_{{ environment_type }}.yml
+
+  tasks:
+  - block:
+
+      - name: Include windows winrm variables
+        include_vars: windows-vars.yml
+
+      - name: Wait upto 300 secs to check the connection
+        wait_for_connection:
+          timeout: 300
+
+      - name: Rename Local Accounts
+        win_shell: |
+          $user = Get-WMIObject Win32_UserAccount -Filter "Name='guest' and LocalAccount='True'" ;
+          $result = $user.Rename("xxxguest")         
+          $user = Get-WMIObject Win32_UserAccount -Filter "Name='Administrator' and LocalAccount='True'" ;
+          $result = $user.Rename("xyz") ;          
+        ignore_errors: true
+
+      - set_fact:
+          ansible_user: xxxadmin
+
+      - name: Windows TSCM
+        import_role:
+          name: ansible_role_windows_agents
+          tasks_from: windows_tscm
+
+      - name: Install Splunk Agent
+        import_role:
+          name: ansible_role_windows_agents
+          tasks_from: splunk_install
+        when: "'tau' not in vm_domain_name"
+
+      - name: Install Bigfix
+        import_role:
+          name: ansible_role_windows_agents
+          tasks_from: bigfix_install
+
+      - name: Install SCCM
+        import_role:
+          name: ansible_role_windows_agents
+          tasks_from: sccm_install
+
+      - name: Install Microsoft LAPS
+        import_role:
+          name: ansible_role_windows_agents
+          tasks_from: install_laps
+
+      - name: Add VM to AU domain 
+        win_domain_membership:
+          dns_domain_name: "{{ vm_domain_name }}"
+          hname: "{{ vm_name | upper }}"
+          domain_admin_user: AU\AddPCToDomain
+          domain_admin_pword: '{{ windows_pword_au }}'
+          domain_ou_path: "{{ OUPATH if ou_path is not defined else ou_path }}"
+          state: domain
+        when: (vm_domain_name == 'au.xxxx.intranet') 
+
+        
+      - name: Reboot after join to domain
+        win_reboot:
+          pre_reboot_delay: 5
+          post_reboot_delay: 10
+          test_command: "whoami"
+
+      - name: Wait upto 300 secs to check the connection after reboot
+        wait_for_connection:
+          timeout: 300
+
+      - set_fact:
+          req_domain: "{{ vm_domain_name.split('.')[0] }}"
+
+      - name: Add required local admin group
+        win_shell: ([ADSI]"WinNT://./Administrators,group").Add("WinNT://{{ req_domain }}/Local Admins - {{ vm_name }}")
+        when: datacenter_name == 'SY6' and vm_domain_name == 'au.xxxx.intranet'
+        ignore_errors: true
+      
+    when: "'WIN' in vm_template and join_domain == 'True'"
+      
+    rescue:
+        
+        - name: Send email
+          mail:
+            host: xxxsmtpgw.au.xxxx.intranet
+            port: 25
+            subject: "CreateVM – Failure – JobId# {{ tower_workflow_job_id }} – VMName# {{ vm_name | upper }}"
+            to: "{{ tower_user_first_name }}.{{ tower_user_last_name }}@xxx.com.au"
+            from: "Ansible Tower@xxx.com.au"
+            secure: never
+            body: |
+              Post SOE tasks failed for VM '{{ vm_name | upper }}, Please check
+
+              JOB URL: "https://ansibleweb/#/workflows/{{ tower_workflow_job_id }}"
+              VM NAME:   {{ vm_name | upper }} 
+              VM IP:     {{ infblx_ipaddr_def }}
+              NETAMSK: {{ vm_networks_netmask_def }}
+              GATEWAY: {{ vm_networks_gateway_def }}
+              VM FQDN:   {{ vm_name }}.{{ vm_domain_name }}
+              CLUSTER:   {{ vm_cluster }}
+              DATA CENTER:   {{ datacenter_name }}
+              OS:        {{ vm_template.split('-')[0] }}
+          delegate_to: localhost
+      
+        - name: Post SOE tasks failed
+          fail:
+            msg: "Post SOE tasks failed"
+          delegate_to: localhost
+
+- name: Waitxxx for RHEL VM to be up
+  hosts: newvm
+  gather_facts: false
+
+  tasks:
+    - name: Wait upto 300 secs to check the connection
+      wait_for_connection:
+        timeout: 300
+      when: "'RHEL' in vm_template"
+      
+    - name: Wait for SSH to be available
+      wait_for:
+        port: 22
+        delay: 10
+      when: "'RHEL' in vm_template"
+
+      remote_user: autotasker
+      
+    
+- name: Create and configure RHEL VM
+  hosts: newvm
+  gather_facts: false
+ 
+  vars_files:
+    - xxxs_{{ environment_type }}.yml
+
+  tasks:
+  - block: 
+      - name: Runnxxx setup
+        setup:
+        
+      - name: Register VM to IPA
+        import_role:
+          name: ansible_role_ipa_client
+        when: "'tau' not in vm_domain_name"
+       
+      - name: Install Splunk
+        import_role:
+          name: ansible_role_splunk
+        when: "'tau' not in vm_domain_name"
+
+      - name: Install Prometheus
+        import_role:
+          name: ansible_role_prometheus
+        when: "'tau' not in vm_domain_name"
+
+      - name: Install Bigfix
+        import_role:
+          name: ansible_role_bigfix
+        vars:
+          site: "{{ 'N' if datacenter_name|upper == 'SY6' else 'T' }}"
+
+      - name: Register VM to satellite
+        import_role:
+          name: ansible_role_vm_create
+          tasks_from: vm_sat_reg
+        when: "'tau' not in vm_domain_name"
+     
+#      - name: Update to latest patch
+#        yum:
+#          state: latest
+#          name: '*'
+#        when: "'tau' not in vm_domain_name"
+    when: "'RHEL' in vm_template and join_domain == 'True'"
+    remote_user: autotasker
+    become: yes
+
+    rescue:
+      - name: uninstall ipa client
+        import_role:
+          name: ansible_role_ipa_client
+          tasks_from: delete_vm_ipa_hostgroup.yml          
+        when: output.rc == 0
+        ignore_errors: true
+      - name: De-register from Satellite
+        shell: "subscription-manager unregister"
+        when: sat_reg.rc == 0
+        ignore_errors: true
+      - name: Send email
+        mail:
+          host: xxxsmtpgw.au.xxxx.intranet
+          port: 25
+          subject: "CreateVM – Failure – JobId# {{ tower_workflow_job_id }} – VMName# {{ vm_name | upper }}"
+          to: "{{ tower_user_first_name }}.{{ tower_user_last_name }}@xxx.com.au"
+          from: "Ansible Tower@xxx.com.au"
+          secure: never
+          body: |
+            Post SOE tasks failed for VM '{{ vm_name | upper }}, Please check
+
+            JOB URL: "https://ansibleweb/#/workflows/{{ tower_workflow_job_id }}"
+            VM NAME:   {{ vm_name | upper }} 
+            VM IP:     {{ infblx_ipaddr_def }}
+            NETAMSK: {{ vm_networks_netmask_def }}
+            GATEWAY: {{ vm_networks_gateway_def }}
+            VM FQDN:   {{ vm_name }}.{{ vm_domain_name }}
+            CLUSTER:   {{ vm_cluster }}
+            DATA CENTER:   {{ datacenter_name }}
+            OS:        {{ vm_template.split('-')[0] }}
+            
+        delegate_to: localhost
+        become: no
+        become_user: testadmin
+     
+      - name: Post SOE tasks failed
+        fail:
+          msg: "Post SOE tasks failed"
+        delegate_to: localhost
+    remote_user: autotasker
+    become: yes
