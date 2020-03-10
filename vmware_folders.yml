@@ -1,0 +1,11 @@
+- name: Generatxxx Folders from a Parent Folder
+    vmware_folders:
+      hname: "{{ vcenter_hname }}"
+      uname: "{{ vcenter_uname }}"
+      pword: "{{ vcenter_pword }}"
+      parent_folder : "{{parent_folder}}"
+    register: snapshot_folders
+  - name: Response
+    debug:
+      msg:
+        - '{{ snapshot_folders }}'
