@@ -1,0 +1,46 @@
+---
+- name: BIAB Create Snapshot of the Folders with Clear Nic
+  hosts: localhost
+  gather_facts: no
+  vars_files:
+    - roles/ansible_role_variables/xxxs/{{'nonxxx' if (cluster_name.split('-')[1]|lower=='nonxxx' or cluster_name.split('-')[1]|lower == 'nxxx') else 'lab' if cluster_name.split('-')[1]|lower=='lab' else 'xxx' if cluster_name.split('-')[1]|lower=='xxx' }}.yml
+
+  tasks:
+    - set_fact: datacenter_name="{{cluster_name.split('-')[0]|lower}}"
+    - set_fact: environment_type="{{cluster_name.split('-')[1]|lower}}"
+    - set_fact: vcenter_domain='{{datacenter_name}}vcenter01.au.xxx.net'
+    - set_fact: cluster="{{cluster_name.split('-')[2]|upper}}"
+    - set_fact: vcenter_hname="{{'p'+vcenter_domain if environment_type == 'xxx' else 'np'+vcenter_domain if (environment_type == 'nonxxx' or environment_type == 'nxxx') else 'l'+vcenter_domain if environment_type == 'lab' }}"
+    - set_fact: clean_nic="{{clean_nic_info|default(false|bool)}}"
+    - set_fact: destination_folder="SNAPSHOT_{{source_folder|upper}}_{{cluster|upper}}_{{timestamp|upper}}"
+    - set_fact: vmuser_dc='BIAB\xxxadmin'
+    - set_fact: dc_hname='BIABZTDC01'
+    - fail:
+        msg: "Provide uname and pword since you have enabled clean nic info"
+      when:
+        - clean_nic_info|bool == true
+        - vm_uname is not defined or
+          vm_pword is not defined or
+          vm_uname is defined and vm_uname == '' or
+          vm_pword is defined and vm_pword == ''
+
+    - name: Creatxxx Snapshot for BIAB with Clear Nic info
+      vmware_clone_folder_biab_nic_dc:
+        hname: "{{ vcenter_hname }}"
+        uname: "{{ vcenter_uname }}"
+        pword: "{{ vcenter_pword }}"
+        parent_folder : "{{parent_folder}}"
+        source_folder : "{{source_folder}}"
+        destination_folder : "{{destination_folder}}"
+        cluster_name: "{{cluster_name}}"
+        vmuser: "{{vm_uname}}"
+        vmpword: "{{vm_pword}}"
+        clean_nic_info: "{{clean_nic_info|default(false|bool) }}"
+        vmuser_dc: "{{vmuser_dc}}"
+        dc_hname: "{{dc_hname}}"
+
+      register: snapshot_status
+    - name: Response
+      debug:
+        msg:
+          - '{{ snapshot_status }}'
