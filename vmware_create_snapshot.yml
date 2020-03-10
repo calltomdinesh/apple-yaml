@@ -1,0 +1,34 @@
+- name: Create/Remove a snapshot
+      vmware_guest_snapshot:
+        hname: "{{ vcenter_hname }}"
+        uname: "{{ vcenter_uname }}"
+        pword: "{{ vcenter_pword }}"
+        datacenter: "{{ datacenter_name }}"
+        folder: "/{{ datacenter_name }}/vm/"
+        name: "{{ vm_name }}"
+        state: "{{ state }}"
+        snapshot_name: "{{ snapshot_name }}"
+        description: "{{ description }}"
+      register: snapshot_list
+      when: not(state == 'list')
+
+    # - name: Listxxx snapshots
+    #   debug:
+    #     msg: "{{ snapshot_list.snapshot_results.snapshots }}"
+    #   when: not(state == 'remove_all' or state == 'list') and snapshot_list.changed
+
+    - name: list the snapshots
+      vmware_guest_snapshot_facts:
+        hname: "{{ vcenter_hname }}"
+        uname: "{{ vcenter_uname }}"
+        pword: "{{ vcenter_pword }}"
+        datacenter: "{{ datacenter_name }}"
+        folder: "/{{ datacenter_name }}/vm/"
+        name: "{{ vm_name }}"
+      delegate_to: localhost
+      register: current_snapshots
+
+    - name: Listxxx all the snapshots of the given VM
+      debug:
+        msg: "{{ current_snapshots.guest_snapshots }}"
+      when: (current_snapshots.guest_snapshots | length > 0)
