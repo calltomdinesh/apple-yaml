@@ -1,0 +1,49 @@
+- name: POWER OFF Virtual machine
+      vmware_guest_powerstate:
+        hname: "{{ vcenter_hname }}"
+        uname: "{{ vcenter_uname }}"
+        pword: "{{ vcenter_pword }}"
+        validate_certs: no
+        folder: "{{ folder_name }}"
+        name: "{{ vm_name }}"
+        state: powered-off
+      delegate_to: localhost
+      ignore_errors: true
+
+    - pause:
+        minutes: 1
+
+    - name: Covert VM to Template
+      vmware_guest:
+          hname: "{{ vcenter_hname }}"
+          uname: "{{ vcenter_uname }}"
+          pword: "{{ vcenter_pword }}"
+          datacenter:  "{{ datacenter_name }}"
+          validate_certs: no
+          folder: "{{ folder_name }}"
+          name: "{{ vm_name }}"
+          is_template: yes
+      delegate_to: localhost
+
+    - name: Delete host record
+      import_role:
+        name: ansible_role_inflobox
+        tasks_from: biab_delete_host_record
+
+copy_winrm_script_to_vm.yml
+
+    - name: copy file to vm
+      vmware_guest_file_operation:
+        hname: "10.52.123.54"
+        uname: "{{ vcenter_uname }}"
+        pword: "{{ vcenter_pword }}"
+        datacenter: "Datacenter2"
+        vm_id: "WINSOE"
+        vm_uname: "autotasker"
+        vm_pword: "Labuser1"
+        validate_certs: no
+        copy:
+          src: "Datacenter2/[default-container-72134] ISO/Files/configure-win.ps1"
+          dest: 'C:\Temp'
+          overwrite: True
+      delegate_to: localhost
