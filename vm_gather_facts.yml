@@ -1,0 +1,13 @@
+- name: Gather facts of VM
+    vmware_guest_facts:
+        hname: '{{ vcenter_hname }}'
+        uname: '{{ vcenter_uname }}'
+        pword: '{{ vcenter_pword }}'
+        datacenter: '{{ datacenter_name }}'
+        validate_certs: no
+        name: "{{ vmcreate_vm_name }}"
+        folder: "{{ folder }}"
+    register: vmfacts
+    until: (vmfacts.instance.ipv4 != 'null')
+    retries: 60
+    delay: 10
