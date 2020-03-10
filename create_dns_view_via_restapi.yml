@@ -1,0 +1,65 @@
+- name: set Nios Provider
+  set_fact:
+    infoblox_nios_provider: "{{xxxx_nios_provider if environment_type|upper == 'XXXX' else nios_provider }}"
+    member: "{{'npsy6iblox01.baba.au.xxx.net' if datacenter_name|upper == 'SY6' else 'npsy7iblox01.baba.au.xxx.net' }}"
+
+- name: Create DNS view and add match_client acl
+  uri: 
+    url: "https://{{ nios_provider['host'] }}///wapi/{{ infblx_version }}/view"
+    method: POST
+    user: "{{ infoblox_user }}" 
+    xxx: "{{ infoblox_pass }}" 
+    return_content: yes
+    body: |
+      {
+        "name": "{{ folder_name }}",
+        "match_clients": [{"_struct": "addressac","address": "{{ networkaddr_infoblox }}","permission": "ALLOW"}]
+       
+      }
+    body_format: json
+    status_code: 201
+    validate_certs: no 
+  register: acl
+  ignore_errors: true
+
+#- name: Add DNS Zone
+  #nios_zone:
+   # name: "baba.internal"
+    #state: present
+    #provider: "{{ infoblox_nios_provider }}"
+    #view: "{{ folder_name }}"
+  #connection: local
+
+- name: Craete zone and name servers to the zone
+  uri: 
+    url: "https://{{ nios_provider['host'] }}/wapi/{{ infblx_version }}/zone_auth?_return_fields%2B=fqdn&_return_as_object=1"
+    method: POST
+    user: "{{ infoblox_user }}" 
+    xxx: "{{ infoblox_pass }}" 
+    return_content: yes
+    body: |
+      {
+        "fqdn": "baba.internal",
+        "view": "{{ folder_name }}",
+        "ns_group": "XXX-AU-BABA-internal"
+      }
+    body_format: json
+    status_code: 201
+    validate_certs: no 
+  register: acl
+  ignore_errors: true
+  
+
+- nios_srv_record:
+    name: "{{ item.0 }}"
+    port: "{{ item.1 }}"
+    priority: "{{ priority }}"
+    target: "{{ target }}"
+    weight: "{{ weight }}"
+    view: "{{ folder_name }}"
+    provider: "{{ infoblox_nios_provider }}"
+    state: present
+  connection: local
+  with_together: 
+    - "{{ name }}"
+    - "{{ port }}"
