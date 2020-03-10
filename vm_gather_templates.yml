@@ -1,0 +1,11 @@
+- name: Get templates from a folder
+    vmware_gather_templates:
+      hname: "{{ vcenter_hname }}"
+      uname: "{{ vcenter_uname }}"
+      pword: "{{ vcenter_pword }}"
+      folder_name: "{{ folder }}"
+    register: templates
+  
+  - debug:
+      msg:
+        - '{{ templates }}'
