@@ -1,0 +1,19 @@
+tasks:
+    - name: Settxxx nonxxx vcenter
+      set_fact:
+        vcenter_hname: "np{{ datacenter_name }}vcenter01.au.xxx.net"
+
+    - name: Start/Stop/Restart - Required BIAB region
+      vmware_region_powerstate_xxx:
+        hname: '{{ vcenter_hname }}'
+        uname: '{{ vcenter_uname }}'
+        pword: '{{ vcenter_pword }}'
+        validate_certs: 'no'
+        folder_name: '{{ region }}'
+        powerstate: '{{ powerstate }}'
+      register: vm_list
+    
+    - name: Display vm powerstate details
+      debug:
+        msg: "{{ vm_list.virtual_machines }}"
+      when: vm_list.virtual_machines is defined
