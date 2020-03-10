@@ -1,0 +1,43 @@
+- name: Gather portgroup facts
+    vmware_dvs_portgroup_info:
+      hname: '{{ vcenter_hname }}'
+      uname: '{{ vcenter_uname }}'
+      pword: '{{ vcenter_pword }}'
+      validate_certs: no
+      datacenter: "{{ datacenter_name }}"
+      show_vlan_info: yes
+    register: dvpg_facts
+
+  #- name: Display port group info
+   # debug:
+    #  msg: "{{ dvpg_facts }}"
+
+  - name: Create an Empty List of switches
+    set_fact:
+       list_switches: []
+
+  - name: Gather all switches
+    set_fact:
+      list_switches: "{{ list_switches }} + [ '{{ item }}']"
+    with_items: "{{ dvpg_facts.dvs_portgroup_info }}"
+
+  - name: Display switches
+    debug:
+      msg: "{{ list_switches }}"
+
+  - name: Gather portgroup facts
+    vmware_dvs_portgroup_info:
+      hname: '{{ vcenter_hname }}'
+      uname: '{{ vcenter_uname }}'
+      pword: '{{ vcenter_pword }}'
+      dvswitch: '{{ item }}'
+      validate_certs: no
+      datacenter: "{{ datacenter_name }}"
+      show_vlan_info: yes
+    register: "dvpg_facts"
+    with_items: "{{ list_switches }}"
+
+  - name: Print portgroup info
+    debug:
+      msg: "{{ dvpg_facts }}"
+
