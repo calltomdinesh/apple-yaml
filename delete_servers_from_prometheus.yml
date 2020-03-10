@@ -1,0 +1,54 @@
+- hosts: prometheus-servers
+  gather_facts: false
+
+  tasks:
+
+    - set_fact:
+        vm_name: "{{ hnames.split(',') }}"
+        
+
+    - name: print vm_name_fqdns
+      debug:
+        msg: "{{ vm_name }}"
+
+    - name: get host files
+      find:
+        paths: /etc/prometheus/tgroups/hosts/
+        patterns: "{{ item }}.*.yml"
+      with_items: "{{ vm_name }}"  
+      register: host_files
+
+    - debug:
+        msg: "{{ host_files }}"
+
+    - set_fact:
+        final_list: |
+             [
+             {% for item in host_files.results %}
+             {% for file in item.files %}
+             {{ '{' }} 'File_path': '{{ file.path }}' {{ '}' }},
+             {% endfor %}
+             {% endfor %}
+             ]
+
+    - name:  remove host file
+      file:
+        path: "{{ item.File_path }}"
+        state: absent
+      with_items: "{{ final_list }}"
+
+    - name: get process file
+      shell: "find {{ item }}.*.yml"
+      args:
+        chdir: "/etc/prometheus/tgroups/process/"
+      loop: "{{ vm_name }}"  
+      register: process_output
+
+    - debug:
+        msg: "{{ process_output.results }}"
+         
+    - name: remove process file
+      file:
+        path: "/etc/prometheus/tgroups/process/{{ item.stdout }}"
+        state: absent
+      with_items: "{{ process_output.results }}" 
