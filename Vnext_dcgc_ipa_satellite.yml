@@ -1,0 +1,51 @@
+- name: remove host from IPA hostgroup
+    ipa_hostgroup:
+      name: "{{ ipa_hostgroup }}"
+      state: absent
+      host: "{{ vm_name_fqdn }}"
+      ipa_host: "{{ ipa_host }}"
+      ipa_user: "{{ ipa_user }}"
+      ipa_pass: "{{ ipa_pword }}"
+      validate_certs: no
+    when: ipa_hostgroup is defined
+
+  - name:  remove host from IPA 
+    ipa_host:
+      name: "{{ vm_name_fqdn }}"
+      state: absent    
+      ipa_host: "{{ ipa_host }}"
+      ipa_user: "{{ ipa_user }}"
+      ipa_pass: "{{ ipa_pword }}"
+      validate_certs: no
+    register: remove_vm
+
+  - set_fact:
+        vm_name: "{{ vm_name_fqdn.split(',') }}"
+  
+  - name: get host ID for given host from satellite
+    uri:
+      url: https://{{ satelliteurl }}/api/v2/hosts/{{ item }}
+      method: GET 
+      user: "{{ satellite_uname }}"
+      pword: "{{ satellite_pwd }}"
+      force_basic_auth: yes 
+      validate_certs: no
+    register: restdata
+    with_items: "{{ vm_name }}"
+    
+
+  - name: delete host from satellite
+    uri:
+      url: https://{{ satelliteurl }}/api/v2/hosts/{{ item }}
+      method: DELETE
+      return_content: yes
+      user: "{{ satellite_uname }}"
+      pword: "{{ satellite_pwd }}"
+      force_basic_auth: yes
+      validate_certs: no
+      follow_redirects: all
+      headers:
+        Accept: "application/json,version=2"
+        Content-Type: "application/json"
+    register: restdata1
+    with_items: "{{ vm_name }}"
