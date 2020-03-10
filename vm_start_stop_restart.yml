@@ -1,0 +1,27 @@
+- name: Gather UUID of VM
+    vmware_guest_facts:
+      hname: "{{ vcenter_hname }}"
+      uname: "{{ vcenter_uname }}"
+      pword: "{{ vcenter_pword }}"
+      validate_certs: no
+      datacenter: "{{ datacenter_name }}"
+      folder: "/{{ datacenter_name }}/vm/{{ folder_name }}"
+      name: "{{ vm_name }}" 
+    delegate_to: localhost
+    register: UUID
+
+  - debug:
+      msg: "{{ UUID.instance['hw_xxxuct_uuid'] }}"
+
+
+  - name: Set the state of a virtual machine 
+    vmware_guest_powerstate:
+      hname: "{{ vcenter_hname }}"
+      uname: "{{ vcenter_uname }}"
+      pword: "{{ vcenter_pword }}"
+      validate_certs: no
+      folder: "/{{ datacenter_name }}/vm/{{ folder_name }}"
+      #name: "{{ vm_name }}" 
+      uuid: "{{ UUID.instance['hw_xxxuct_uuid'] }}"
+      state: "{{ req_state }}"
+    delegate_to: localhost
