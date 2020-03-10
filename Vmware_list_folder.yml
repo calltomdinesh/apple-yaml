@@ -1,0 +1,8 @@
+    - name: Listxxx vms of provided region
+      vmware_list_folder:
+        hname: '{{ vcenter_hname }}'
+        uname: '{{ vcenter_uname }}'
+        pword: '{{ vcenter_pword }}'
+        validate_certs: 'no'
+        folder_name: '{{ region }}'
+      register: vm_list
