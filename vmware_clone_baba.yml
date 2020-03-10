@@ -1,0 +1,52 @@
+#- block:
+    - name: BABA VM Deployments
+      vmware_clone_baba:
+        hname: '{{ vcenter_hname }}'
+        uname: '{{ vcenter_uname }}'
+        pword: '{{ vcenter_pword }}'
+
+        vm_name : '{{vmcreate_vm_name}}'
+        template : '{{vm_template}}'
+        cluster : '{{vm_cluster_name}}'
+        datastore : '{{vm_datastore_name}}'
+        portgroup : '{{vm_networks_name}}'
+        folder : '{{vm_folder}}'
+        deployment_type: '{{os_type}}_{{os_version}}'
+
+        vm_ip: '{{infblx_ipaddr_def}}'
+        vm_ip_subnet: '{{vm_networks_netmask_def}}'
+        vm_ip_gateway: '{{vm_networks_gateway_def}}'
+        vm_ip_dns: '{{nxxx_dnsserver}}'
+        
+        vmuser: '{{vm_uname}}'
+        vmpword: '{{vm_pword}}'
+      register: vmfacts
+    - debug:
+        msg:
+          - '{{vmfacts}}'
+
+Vmware_delete_region.yml
+
+    - name: Deletxxx provided region/snapshot
+      vmware_delete_region_xxx:
+        hname: '{{ vcenter_hname }}'
+        uname: '{{ vcenter_uname }}'
+        pword: '{{ vcenter_pword }}'
+        validate_certs: 'no'
+        folder_name: '{{ region }}'
+      register: vm_list
+
+vmware_delete_snapshot.yml
+
+    - name: Create/Remove a snapshot
+      vmware_guest_snapshot:
+        hname: "{{ vcenter_hname }}"
+        uname: "{{ vcenter_uname }}"
+        pword: "{{ vcenter_pword }}"
+        datacenter: "{{ datacenter_name }}"
+        folder: "/{{ datacenter_name }}/vm/"
+        name: "{{ vm_name }}"
+        state: "{{ state }}"
+        snapshot_name: "{{ snapshot_name }}"
+        description: "{{ description }}"
+      register: snapshot_list
