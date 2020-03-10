@@ -1,0 +1,9 @@
+- name: vmware baba vm build checklist
+      vmware_vm_build_checklist_xxx:
+        hname: '{{ vcenter_hname }}'
+        uname: '{{ vcenter_uname }}'
+        pword: '{{ vcenter_pword }}'
+        vm_name : '{{vm_name}}'
+        folder : '{{vm_folder}}'
+      register: vmfacts
+
