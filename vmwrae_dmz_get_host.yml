@@ -1,0 +1,117 @@
+---
+- hosts: localhost
+  gather_facts: false
+
+  vars:
+    vm_count_list: []
+    hosts_a_dmz:
+      - "{{datacenter_name| lower}}-a-dmz-esx01.au.xxx.net"
+      - "{{datacenter_name| lower}}-a-dmz-esx02.au.xxx.net"
+      - "{{datacenter_name| lower}}-a-dmz-esx03.au.xxx.net"
+    hosts_b_dmz:
+      - "{{datacenter_name| lower}}-b-dmz-esx01.au.xxx.net"
+      - "{{datacenter_name| lower}}-b-dmz-esx02.au.xxx.net"
+      - "{{datacenter_name| lower}}-b-dmz-esx03.au.xxx.net"
+
+  vars_files:
+    - xxxs_xxx.yml
+
+  tasks:
+    - set_fact: vcenter_domain='{{ datacenter_name}}vcenter01.au.xxx.net'
+    
+    - set_fact: vcenter_hname="{{'p'+vcenter_domain if environment_type == 'xxx' else 'np'+vcenter_domain if environment_type == 'nonxxx' }}"
+
+    - name: Get VMs based on category and tag provided
+      vmware_get_vms_by_tag:
+        hname: '{{ vcenter_hname }}'
+        uname: '{{ vcenter_uname }}'
+        pword: '{{ vcenter_pword }}'
+        category_name: "{{ item.split('=')[0] }}"
+        tag_name: "{{ item.split('=')[1] }}"
+      register: tag_info
+      loop: "{{ category_tag.split(',') }}"
+
+    # - set_fact:
+    #     final_list: "{{ tag_info.results[0].vm_list | intersect(tag_info.results[1].vm_list) }}"
+
+    - set_fact:
+        final_list: "{{ final_list|default(tag_info.results.0.vm_list)|intersect(tag_info.results[item].vm_list) }}"
+      loop: "{{ range(1, tag_info.results|length, 1)|list }}"
+
+    - name: Get the esx host for the provided VMs
+      vmware_get_vm_esx_host:
+        hname: '{{ vcenter_hname }}'
+        uname: '{{ vcenter_uname }}'
+        pword: '{{ vcenter_pword }}'
+        vm_name: "{{ item }}"
+      register: esx_hosts
+      loop: "{{ final_list }}"
+
+    - set_fact:
+        vm_count_list: |
+          {% for i in range(esx_hosts.results|length) %}
+          {{ vm_count_list.append(esx_hosts.results[i].esx_host[0].Host) }}
+          {% endfor %}
+          {{ vm_count_list | join(',') }}
+
+    - set_fact:
+        host_list: "{{ vm_count_list | replace('\n', '') }}"
+
+    - set_fact:
+        xxx_hosts: "{{ hosts_a_dmz if site|lower == 'a' else hosts_b_dmz }}"
+
+    - set_fact:
+         host_count: |
+           [
+           {% for item in xxx_hosts %}
+           {{ '{' }} 'Host':'{{ item }}', 'Count':'{{ host_list.count(item) }}' {{ '}' }},
+           {% endfor %}
+           ]
+
+    - set_fact:
+         final_count_list: "{{ final_count_list|default([]) + host_count | sort(attribute='Host', reverse = True) }}"
+
+    - set_fact: required_filter="{{ site|lower}}-{{ host_filter|lower }}"
+
+    - name: Check host usage
+      vmware_esx_host_capacity_info:
+        hname: '{{ vcenter_hname }}'
+        uname: '{{ vcenter_uname }}'
+        pword: '{{ vcenter_pword }}'
+        host_filter: '{{ required_filter }}'
+      register: host_info
+
+    - name: Calculatxxx hosts score based on compute
+      set_fact:
+        host_score_list: |
+          [
+          {% for item in host_info.host_capacity_info %}
+          {{ '{' }} 'Host':'{{ item.Host }}', 'Score':'{{ (item.Memory_Free_Percentage*0.55 + item.Datastore_Free_Percentage*0.35 + item.Cpu_Free_Percentage*0.10) | round(2) }}' {{ '}' }},
+          {% endfor %}
+          ]
+
+    - name: Set list of preffered hosts
+      set_fact:
+        preferred_hosts: "{{ host_score_list | sort(attribute='Host', reverse = True) }}"
+
+    - set_fact:
+        get_host_score: "{{ get_host_score|default([]) + preferred_hosts | json_query(score_check) | list }}"
+      vars:
+        score_check: "[?Host == `{{item}}`].{Score: Score}"
+      loop:
+        - "{{ final_count_list[0].Host }}"
+        - "{{ final_count_list[1].Host }}"
+        - "{{ final_count_list[2].Host }}"
+
+    - set_fact:
+        final_score_list: |
+          [
+          {% for i in range(final_count_list|length) %}
+          {{ '{' }} 'Host':'{{ final_count_list[i].Host }}', 'Score':'{{ (get_host_score[i].Score| int) * (0.5 | pow(final_count_list[i].Count | int)) }}' {{ '}' }},
+          {% endfor %}
+          ]
+
+    - name: Pass required values
+      set_stats:
+        data:
+          dmz_esx_hosts: "{{ final_score_list }}"
