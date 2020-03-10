@@ -1,0 +1,21 @@
+- name: Create DRS Anti Affinity Rule for VM-VM
+      vmware_vm_vm_drs_rule:
+        hname: "{{ vcenter_hname }}"
+        uname: "{{ vcenter_uname }}"
+        pword: "{{ vcenter_pword }}"
+        cluster_name: "{{ datacenter_name }}-{{ cluster_name }}"
+        validate_certs: no
+        vms: "{{ item.split(',') }}"
+        drs_rule_name: "{{ rule_name }}"
+        enabled: True
+        mandatory: True
+        affinity_rule: "{{ action_type }}"
+      with_items: "{{ vm_list }}"  
+      delegate_to: localhost
+      register: rule_creation
+     
+
+    - name:
+      debug:
+        msg:
+          - "{{ rule_creation }}" 
