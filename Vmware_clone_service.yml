@@ -1,0 +1,33 @@
+- name: Clone template to new VM
+      vmware_guest:
+        hname: "{{ vcenter_hname }}"
+        uname: "{{ vcenter_uname }}"
+        pword: "{{ vcenter_pword }}"
+        datacenter:  "{{ datacenter_name }}"
+        validate_certs: no
+
+        folder: "{{ vm_folder }}"
+        name: "{{ vmcreate_vm_name }}"
+        template: "{{ source_vm_name }}"
+        cluster: "{{ datacenter_name }}-{{ cluster_name }}"
+        state: poweredoff
+      delegate_to: localhost
+      register: clone_vm
+
+    - name:
+      debug:
+        msg:
+          - "{{ clone_vm }}"  
+
+    - name: Delete a virtual machine
+      vmware_guest:
+        hname: "{{ vcenter_hname }}"
+        uname: "{{ vcenter_uname }}"
+        pword: "{{ vcenter_pword }}"
+        datacenter:  "{{ datacenter_name }}"
+        validate_certs: no
+        name: "{{ source_vm_name }}"
+        state: "{{ state }}"
+        force: yes
+      delegate_to: localhost
+      register: delete_vm
