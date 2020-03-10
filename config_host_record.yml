@@ -1,0 +1,40 @@
+- fail:
+      msg: This IP is already assigned to a VM and host record doesn't exist. Please contact platform team.  
+    when: infblx_ipaddr_def in list_ips
+   
+  - name: create an ipv4 host record
+    nios_host_record:
+      name: "{{ vm_name }}.au.xxx.net"
+      ipv4:
+        - address: "{{ infblx_ipaddr_def }}"
+      dns: true
+      configure_for_dns: yes
+      view: 'XXX-NL-BE'
+      state: present
+      provider: "{{ infoblox_nios_provider }}"
+    when: (is_baba == 'False') or (is_baba is not defined) 
+
+  - name: create an ipv4 host record
+    nios_host_record:
+      name: "{{ item.name }}"
+      ipv4:
+        - address: "{{ infblx_ipaddr_def }}"
+      dns: true
+      configure_for_dns: yes
+      view: "{{ item.view }}"
+      state: present
+      provider: "{{ infoblox_nios_provider }}"
+    with_items: 
+      - {name: "{{ vm_folder }}-{{ vm_name }}.baba.au.xxx.net", view: 'XXX-NL-BE'}
+      - {name: "{{ vm_name }}.baba.internal", view: 'xxxdirect-rc'}
+    when: (is_baba == 'True') and (is_baba is defined)
+
+- name: configure an A record
+    nios_a_record:
+      name: "{{ name_dns }}{{ zone_type }}"
+      ipv4: "func:nextavailableip:{{ vm_infblx_network }}"
+      state: present
+      view: "XXX-NL-BE"
+      provider: "{{ infoblox_nios_provider }}"
+    register: dns
+    when: (records|length == 0)
