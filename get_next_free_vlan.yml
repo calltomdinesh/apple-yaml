@@ -1,0 +1,25 @@
+- name: Get container networks
+  set_fact: 
+    container_nws: "{{ lookup('nios', 'network',wantlist=True,extattrs=extattrs_filter,return_fields=['extattrs','network','comment'],provider=infoblox_nios_provider ) }}"
+
+- name: Container Nws
+  fail: msg="Check Container Free IPs"
+  when: container_nws|length == 0
+
+- name: Get the first value from the List for vlanid
+  set_fact: 
+    container_nw_vlanid: "{{ container_nws[0]['extattrs']['VLANID'] | int }}"
+- name: Get the first value from the List for network
+  set_fact: 
+    container_nw_cidr: "{{ container_nws[0]['network'] }}"
+- name: Get the first value from the List for Comment
+  set_fact: 
+    container_nw_comment: "{{ container_nws[0]['comment'] }}"
+
+
+- set_fact:
+    octect3: "{{ container_nw_cidr.split('.')[2] | int }}"
+  when: region_nw|length == 0
+
+- set_fact: container_subnet_name={{ 'BZ-NXXXX-SUBNET0'+octect3 if (octect3|int > 9) and (octect3|int < 100) else 'BZ-NXXXX-SUBNET00'+octect3 if (octect3|int < 9) else 'BZ-NXXXX-SUBNET'+octect3 }}
+  when: region_nw|length == 0
