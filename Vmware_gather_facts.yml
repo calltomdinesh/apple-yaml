@@ -1,0 +1,50 @@
+- block:
+      - name: Gather all registered virtual machines
+        vmware_vm_facts:
+          hname: '{{ vcenter_hname }}'
+          uname: '{{ vcenter_uname }}'
+          pword: '{{ vcenter_pword }}'
+          validate_certs: no
+        register: vmfacts
+    rescue:
+      - name: Send email
+        mail:
+          host: xxxsmtpgw.au.xxxx.intranet
+          port: 25
+          subject: "CreateVM – Failure – JobId# {{ tower_workflow_job_id }} – VMName# {{ vm_name | upper }}"
+          to: "{{ tower_user_first_name }}.{{ tower_user_last_name }}@xxx.com.au"
+          from: "Ansible Tower@xxx.com.au"
+          secure: never
+          body: |
+            VMware gather facts failed, Please check
+            JOB URL: "https://ansibleweb/#/workflows/{{ tower_workflow_job_id }}"
+
+        delegate_to: localhost
+
+      - fail:
+          msg: Gather Facts failed, please check
+    
+
+  - name: Create Empty Lists for VMware Virtual Machines
+    set_fact:
+       list_vms: []
+       list_ips: []
+
+  - name: Append VMWare Guest to list
+    set_fact:
+      list_vms: "{{ list_vms }} + [ '{{ item.guest_name | upper  }}']"
+    with_items: "{{ vmfacts.virtual_machines }}"
+
+  - name: Append VM Ips to the list
+    set_fact:
+      list_ips: "{{ list_ips }} + [ '{{ item.ip_address }}']"
+    with_items: "{{ vmfacts.virtual_machines }}"
+
+  - name: Passxxx data for next playbook
+    set_stats:
+      data:
+        list_ips: "{{ list_ips }}"
+
+  - fail:
+     msg: Host exists on VMware already . Enter new Hname  
+    when: vmcreate_vm_name in list_vms
