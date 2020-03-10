@@ -1,0 +1,55 @@
+- name: set Nios Provider
+  set_fact:
+    infoblox_nios_provider: "{{xxxx_nios_provider if environment_type|upper == 'XXXX' else nios_provider }}"
+#- name: Set Location for Search
+ # set_fact:
+   # location: "{{ zone | upper }}-{{ subzone | upper }}"
+- name: Set filter for extra attrs
+  set_fact:
+    extattrs_filter:
+        #Site: "{{ site|upper }}"
+        Subnet_name: "{{ infblx_network }}"
+        
+- name: Get container networks
+  set_fact: 
+    container_nws: "{{ lookup('nios', 'network',wantlist=True,extattrs=extattrs_filter,return_fields=['extattrs','network','comment'],provider=infoblox_nios_provider ) }}"
+
+- name: Container Nws
+  fail: msg="Check if network exists"
+  when: container_nws|length == 0
+
+- debug:
+   msg: "{{ container_nws }}"
+
+- name: Get the first value from the List for vlanid
+  set_fact: 
+    vlan: "{{ container_nws[0]['extattrs']['VLAN'] | int }}"
+- name: Get the first value from the List for network
+  set_fact: 
+    container_nw_cidr: "{{ container_nws[0]['network'] }}"
+- name: Get the first value from the List for Comment
+  set_fact: 
+    container_nw_comment: "{{ container_nws[0]['comment'] }}"
+
+- name: Pass Vlan id to the next template
+  set_stats:
+    data:
+      vlan: "{{ vlan }}"
+
+infblx_display_objects.yml
+
+
+- name: Return cname or host records
+  uri:
+    url: "https://{{nios_provider['host']}}//wapi/v2.7.1/record:{{ record_type }}?zone={{ zone }}&view={{ dns_view }}&_max_results=5000"
+    method: GET
+    user: "{{ infoblox_user }}"
+    xxx: "{{ infoblox_pass }}"
+    force_basic_auth: yes
+    status_code: 200
+    validate_certs: no
+  register: hostname
+
+- debug:
+    msg: "view :- {{ item.view }}, name:- {{ item.name }}"
+  with_items: "{{ hostname.json }}"
