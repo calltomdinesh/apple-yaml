@@ -1,0 +1,25 @@
+- name: Reconfigurxxx VM as per the inputs provided
+      vmware_reconfigure_vm_network:
+        hname: '{{ vcenter_hname }}'
+        uname: '{{ vcenter_uname }}'
+        pword: '{{ vcenter_pword }}'
+
+        vm_name : '{{ vm_name }}'
+        portgroup : '{{ portgroup }}'
+        folder : '{{ folder }}'
+        deployment_type: '{{ os_type }}_{{ os_version }}'
+
+        vm_ip: '{{ vm_ip }}'
+        vm_ip_subnet: '{{ vm_ip_subnet }}'
+        vm_ip_gateway: '{{ vm_ip_gateway }}'
+        vm_ip_dns: '{{ vm_ip_dns }}'
+
+        vmuser: '{{ vmuser }}'
+        vmpword: '{{ vmpword }}'
+        vm_shell: '{{ vm_shell }}'
+      register: vmfacts
+
+    - debug:
+        msg:
+          - '{{vmfacts}}'
+
