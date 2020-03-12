@@ -1,0 +1,26 @@
+- name: projects > trigger update of the projects
+  uri:
+    url: "Error! Hyperlink reference not valid."
+    method: POST
+    validate_certs: no
+    usxxx: admin
+    paxxxx: "{{ ansible_admin_paxxxx }}"
+    force_basic_auth: yes
+    status_code: 200,201,202
+    timeout: 60
+  with_items: "{{ project_ids }}"
+
+- name: projects > wait until the project files are downloaded
+  uri:
+    url: "Error! Hyperlink reference not valid."
+    method: GET
+    validate_certs: no
+    usxxx: admin
+    paxxxx: "{{ ansible_admin_paxxxx }}"
+    force_basic_auth: yes
+    status_code: 200,201,202
+  with_items: "{{ project_ids }}"
+  register: json_response
+  until: json_response.json|length > 0
+  retries: 5
+  delay: 30
