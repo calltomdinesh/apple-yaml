@@ -1,0 +1,121 @@
+- include: get_active_f5_ip.yml
+
+- set_fact:
+    snat_pool_name: "{{ snat_pool }}"
+  when: (snat == 'pool') and (snat_pool != '')
+
+- set_fact:
+    snat_pool_name: "none"
+  when: snat == 'none'
+
+- set_fact:
+    snat_pool_name: "automap"
+  when: snat == 'automap'
+
+- name: set Nios Provider
+  set_fact:
+    infoblox_nios_provider: "{{prod_nios_provider if environment_type|upper == 'PROD' else nios_provider }}"
+    zone_type: "{{ '.au.xyz.net' if environment_type|upper == 'PROD' else '.biab.au.xyz.net' }}"
+
+- set_fact:
+     profiles: "{{ profile.split(',') }}"
+  when: profile is defined
+
+- debug:
+    var: profiles
+
+- set_fact:
+    vip_profiles: "{{ vip_profiles|default([]) + [vip_profile]  }}"
+  vars:
+    vip_profile:
+      name: "{{ item }}"
+      context: all
+  with_items: "{{ profiles }}"
+
+- debug:
+    var: vip_profiles
+
+- set_fact:
+        vip_profiles: "{{ (vip_profiles | default([])) +  vip_profile   }}"
+  vars:
+    vip_profile:
+      - name:  "{{ item }}"
+        context: all
+  with_items: "{{ profiles  }}"
+
+- debug:
+    msg: "{{ vip_profiles }}"
+
+- set_fact:
+    all_profiles: "{{ vip_profiles + ssl_profiles }}"
+  vars:
+    ssl_profiles:
+      - name: "{{ client_profile }}"
+        context: client-side
+      - name: "{{ server_profile }}"
+        context: server-side
+       
+- debug:
+    msg: "{{ all_profiles }}"
+
+
+
+- name: Add/Delete virtual server
+  bigip_virtual_server:
+    provider:
+      server: "{{ active_f5_server }}"
+      usxxx: "{{ f5_usxxx }}"
+      paxxxx: "{{ f5_paxxxx }}"
+      validate_certs: no
+    state: "{{ state }}"
+    name: "{{ name }}"
+    description: "{{ description|default(omit) }}"
+    partition: "{{ partition }}"
+    destination: "{{ infblx_ipaddr_def|default(omit) }}"
+    port: "{{ port }}"
+    pool: "{{ pool }}"
+    snat: "{{ snat_pool_name }}"
+    irules: "{{ irules.split(',')|default(omit) }}"
+    default_persistence_profile: "{{ default_persistence_profile|default(omit) }}"
+    rate_limit: "{{ rate_limit }}"
+    profiles: "{{ all_profiles }}"
+    
+  #vars:
+   # ssl_profiles:
+    #  - name: "{{ client_profile|default(omit) }}"
+    #    context: client-side
+    #  - name: "{{ server_profile|default(omit) }}"
+    #    context: server-side
+    
+  #with_items: "{{ profiles }}"
+  
+    #validate_certs: no
+  #with_items: "{{ profiles }}"
+  register: register_virtual_server
+
+- set_fact:
+      vs_dns: "{{ name.split('_')[0:4]|join('_') }}"
+
+
+
+- name: Delete A record after deletxyz the virtual server
+  nios_a_record:
+    name: "{{ vs_dns|lower }}{{ zone_type }}"
+    ipv4: "{{ infblx_ipaddr_def|default(omit) }}"
+    state: absent
+    view: 'XYZ-NL-BE'
+    provider: "{{ infoblox_nios_provider }}"
+  #with_items: "{{ dns_name.split(',') }}"
+  when: state == 'absent'
+  connection: local
+
+- name: Delete dns records
+  nios_a_record:
+    name: "{{ item|lower }}{{ zone_type }}"
+    ipv4: "{{ infblx_ipaddr_def|default(omit) }}"
+    state: absent
+    view: 'XYZ-NL-BE'
+    provider: "{{ infoblox_nios_provider }}"
+  with_items: "{{ dns_name.split(',') }}"
+  when: state == 'absent'
+  connection: local
