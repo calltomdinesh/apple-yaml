@@ -1,0 +1,27 @@
+---
+  - name: Set activation key
+    set_fact:
+      activationkey: "{{ activation_keys[vm_template.split('-')[0]] }}"
+
+  - name: Clear Redhat subscription
+    shell: 'subscription-manager remove --all ; subscription-manager unregister ; subscription-manager clean'
+    ignore_errors: true
+
+  - name: Install katello certificate
+    yum:
+      name: "Error! Hyperlink reference not valid."
+      state: present
+      validate_certs: no
+    
+  - name: Register VM to redhat satellite
+    redhat_subscription:
+      state: present
+      activationkey: "{{ activationkey }}"
+      org_id: "{{ org_id }}"
+      force_register: yes
+    register: sat_reg
+to un register:
+ - name: De-register from Satellite
+        shell: "subscription-manager unregister"
+        when: sat_reg.rc == 0
+        ignore_errors: true
