@@ -1,0 +1,321 @@
+main.yml
+---
+- name: Register IPA Client
+  block:
+
+    - name: set server fqdn fact
+      set_fact: 
+        server_fqdn: "{{ inventory_hostname }}.{{ domain_fqdn }}"
+
+    - name: Enroll IPA
+      include_tasks: enroll_ipa.yml
+
+  rescue:
+    - fail:
+        msg: "Register IPA Client failed for the host {{ inventory_hostname }}.{{ domain_fqdn }}!!!!"
+
+delete_vm_ipa_host.yml
+  - name: remove host from IPA hostgroup
+    ipa_hostgroup:
+      name: "{{ ipa_hostgroup }}"
+      state: present
+#      host: "{{ server_fqdn }}"
+      host: "{{ ansible_fqdn }}"
+      ipa_host: "{{ ipa_host }}"
+      ipa_usxxx: "{{ ipa_usxxx }}"
+      ipa_pxx: "{{ ipa_paxxxx }}"
+      validate_certs: no
+    become: no
+
+enroll_ipa.yml
+---
+#  - name: "load the variables and secxyzs task from common"
+#    include_tasks: load_vars.yml
+  - name: Set fact for ipa servers required domain
+    set_fact:
+      req_domain: "{{ vm_domain_name.split('.')[0] }}"
+
+  - name: Backup the config files
+    copy:
+      remote_src: true
+      src: "{{ item.src }}"
+      dest: "{{ item.dest }}"
+      backup: yes
+    ignore_errors: yes
+    with_items:
+        - src: /etc/krb5.conf
+          dest: /etc/krb5.conf.before.ipa
+        - src: /etc/ntp.conf
+          dest: /etc/ntp.conf.before.ipa
+        - src: /etc/pam.d/paxxxx-auth-ac
+          dest: /etc/pam.d/paxxxx-auth-ac.before.ipa
+        - src: /etc/pam.d/system-auth-ac
+          dest: /etc/pam.d/system-auth-ac.before.ipa
+        - src: /etc/resolv.conf
+          dest: /etc/resolv.conf.before.ipa
+        - src: /etc/hosts
+          dest: /etc/hosts.before.IPA
+#        - src: /etc/cron.d/kerberos
+#          dest: /var/tmp/kerberos
+
+  - block:
+    - name: install ipa client
+      shell: ipa-client-install --mkhomedir --ssh-trust-dns  --no-ntp --domain=idm.{{ domain_fqdn }} --principal=ipa_enroll -w {{ ipa_paxxxx }} --unattended
+      register: output
+#      until: output.rc == 0
+#      retries: 5
+#      delay: 60
+
+    - name: log the output
+      debug:
+        msg: "{{ output.stdout }}"
+
+    rescue:
+      - name: uninstall ipa client
+        shell: ipa-client-install --uninstall --unattended
+        ignore_errors: yes
+
+      - name: log the output
+        debug:
+          msg: "{{ output.stderr }}"
+
+      - fail:
+          msg: "IPA Client install failed with the error {{ output.stderr }}"
+
+  - name: Add additional sssd config
+    lineinfile:
+      path: /etc/sssd/sssd.conf
+      insertafter: '^dns_discovery_domain'
+      line: "{{ item }}"
+      state: present
+    with_items:
+      - 'ldap_search_timeout = 20'
+      - 'override_homedir = /home/%u'
+      - 'override_shell = /bin/bash'
+
+  - name: service sssd stop
+    service:
+      name: sssd
+      state: stopped
+    # listen: "restart sssd"
+    # notify: remove sss db
+
+  - name: remove sss db
+    file: 
+      path: /var/lib/sss/db/*
+      state: absent
+    # changed_when: True
+    # notify: service sssd start
+
+  - name: service sssd start
+    service: 
+      name: sssd
+      state: started
+
+  - name: set ipa client install status
+    set_fact:
+      ipa_client_install_status: true
+
+  - name: Addxyz host to IPA hostgroups
+    ipa_hostgroup:
+      name: "{{ ipa_hostgroup }}"
+      state: present
+#      host: "{{ server_fqdn }}"
+      host: "{{ ansible_fqdn }}"      
+      ipa_host: "{{ ipa_host }}"
+      ipa_usxxx: "{{ ipa_usxxx }}"
+      ipa_pxx: "{{ ipa_paxxxx }}"
+      validate_certs: no
+    become: no
+register_ipaclient.yml
+---
+#  - name: "load the variables and secxyzs task from common"
+#    include_tasks: load_vars.yml
+  - name: Set fact for ipa servers required domain
+    set_fact:
+      req_domain: "{{ vm_domain_name.split('.')[0] }}"
+
+  - name: Backup the config files
+    copy:
+      remote_src: true
+      src: "{{ item.src }}"
+      dest: "{{ item.dest }}"
+      backup: yes
+    ignore_errors: yes
+    with_items:
+        - src: /etc/krb5.conf
+          dest: /etc/krb5.conf.before.ipa
+        - src: /etc/ntp.conf
+          dest: /etc/ntp.conf.before.ipa
+        - src: /etc/pam.d/paxxxx-auth-ac
+          dest: /etc/pam.d/paxxxx-auth-ac.before.ipa
+        - src: /etc/pam.d/system-auth-ac
+          dest: /etc/pam.d/system-auth-ac.before.ipa
+        - src: /etc/resolv.conf
+          dest: /etc/resolv.conf.before.ipa
+        - src: /etc/hosts
+          dest: /etc/hosts.before.IPA
+        - src: /etc/cron.d/kerberos
+          dest: /var/tmp/kerberos
+
+  - name: Make sure the hostname is lowercase FQDN
+    shell: tr '[:upper:]' '[:lower:]' < /etc/hosts.before.IPA > /etc/hosts
+    register: output
+
+  - name: Get the hostname
+    shell: hostname -s | tr '[:upper:]' '[:lower:]' 
+    register: hostname_orig
+
+  - name: set hostname
+    set_fact: 
+      server_fqdn: "{{ hostname_orig.stdout }}.{{ domain_fqdn }}"
+
+  - name: init ipa server list
+    set_fact:
+      ip_server_list: ""
+  
+  - name: set ipa server list
+    set_fact:
+      ip_server_list: "{{ ip_server_list }} --server={{ item }}"
+    with_items: "{{ ipa_servers }}"
+
+  - name: Update the hostname
+    hostname:
+      name: "{{ server_fqdn }}"
+
+  - block:
+    - name: install ipa client
+      shell: ipa-client-install --mkhomedir --ssh-trust-dns  --no-ntp {{ ip_server_list }} --domain=ipa.{{ domain_fqdn }} --principal=ipa_enroll -w {{ ipa_paxxxx }} --unattended
+      register: output
+#      until: output.rc == 0
+#      retries: 5
+#      delay: 60
+
+    - name: log the output
+      debug:
+        msg: "{{ output.stdout }}"
+
+    rescue:
+      - name: log the output
+        debug:
+          msg: "{{ output.stderr }}"
+
+      - name: revert the host file
+        copy:
+          remote_src: true
+          src: /etc/hosts.before.IPA
+          dest: /etc/hosts
+
+      - name: revert the hostname
+        hostname:
+          name: "{{ hostname_orig.stdout }}"
+      
+      - fail:
+          msg: "IPA Client install failed with the error {{ output.stderr }}"
+
+  - name: revert the host file
+    copy:
+      remote_src: true
+      src: /etc/hosts.before.IPA
+      dest: /etc/hosts
+
+  - name: revert the hostname
+    hostname:
+      name: "{{ hostname_orig.stdout }}"
+  
+  - name: update system-auth-ac
+    lineinfile:
+      path: /etc/pam.d/system-auth-ac 
+      regexp: 'pam_krb5.so'
+      state: absent
+  
+  - name: update paxxxx-auth-ac
+    lineinfile:
+      path: /etc/pam.d/paxxxx-auth-ac
+      regexp: 'pam_krb5.so'
+      state: absent
+  
+  - name: "Comment Allow Groups in ssd config"
+    replace:
+      dest: /etc/ssh/sshd_config
+      regexp: '^(AllowGroups)'
+      replace: '#AllowGroups'  
+  
+  - name: reload ssh
+    service:
+      name: sshd
+      state: reloaded
+  
+  - name: Get Kernel Version
+    shell: uname -r | awk -F- '{print $1}'
+    register: kernel_version
+  
+  - name: Display kernel version
+    debug:
+     msg: "{{ kernel_version.stdout }}"
+
+  - name: enable oddjobd.service
+    systemd:
+      name: oddjobd
+      enabled: yes
+      state: started
+    when: kernel_version.stdout == "3.10.0"
+
+  - name: start messagebus
+    service:
+      name: messagebus
+      runlevel: 3
+      state: started
+    when: kernel_version.stdout == "2.6.32"
+  
+  - name: start oddjobd
+    service:
+      name: oddjobd
+      state: started
+    when: kernel_version.stdout == "2.6.32"
+
+  - name: create the krb5.conf
+    template:
+      src: ipa/krb5.conf.j2
+      dest: /etc/krb5.conf  
+
+  - name: create the sssd.conf
+    template:
+      src: ipa/sssd.conf.j2
+      dest: /etc/sssd/sssd.conf
+  
+  - name: service sssd stop
+    service:
+      name: sssd
+      state: stopped
+    # listen: "restart sssd"
+    # notify: remove sss db
+
+
+  - name: remove sss db
+    file: 
+      path: /var/lib/sss/db/*
+      state: absent
+    # changed_when: True
+    # notify: service sssd start
+
+  - name: service sssd start
+    service: 
+      name: sssd
+      state: started
+
+  - name: set ipa client install status
+    set_fact:
+      ipa_client_install_status: true
+
+  - name: Addxyz host to IPA hostgroups
+    ipa_hostgroup:
+      name: "{{ ipa_hostgroup }}"
+      state: present
+#      host: "{{ server_fqdn }}"
+      host: "{{ ansible_fqdn }}"
+      ipa_host: "{{ ipa_host }}"
+      ipa_usxxx: "{{ ipa_usxxx }}"
+      ipa_pxx: "{{ ipa_paxxxx }}"
+      validate_certs: no
+    become: no
