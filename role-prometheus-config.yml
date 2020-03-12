@@ -1,0 +1,250 @@
+main.yml
+---
+
+- name: mkdir for general cases
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ prometheus_usxxx }}"
+    group: "{{ prometheus_group }}"
+    mode: "u=rwx,g=rx,o="
+  ignore_errors: yes
+  with_items:
+    - "{{ prometheus_install_path }}"
+    - "{{ prometheus_config_path }}"
+    - "{{ prometheus_log_path }}"
+    - "{{ prometheus_pid_path }}"
+
+
+
+
+- name: install node-exporter
+  include: install-node-exporter.yml
+  
+
+- name: install process-exporter
+  include: install-process-exporter.yml
+ 
+- name: restart node_exporter
+  service: name=node_exporter state=restarted
+
+- name: restart process-exporter
+  service: name=process-exporter enabled=yes state=restarted
+  when: prometheus_use_service|bool
+
+- name: Pxx prometheus_install var to the next template
+  set_stats:
+    data:
+      prometheus_install: "{{ prometheus_install }}"
+
+install-node-exporter.yml
+---
+
+- name: set internal variables for convenience
+  set_fact:
+    prometheus_node_exporter_tarball_name: node_exporter-{{ prometheus_node_exporter_version }}.{{ prometheus_platform_suffix }}.tar.gz
+    prometheus_node_exporter_daemon_dir: "{{ prometheus_install_path }}/node_exporter-{{ prometheus_node_exporter_version }}.{{ prometheus_platform_suffix }}"
+
+- name: download and untar node_exporter tarball
+  unarchive:
+    src: files/{{ prometheus_node_exporter_tarball_name }}
+    dest: "{{ prometheus_install_path }}"
+
+
+- name: set permissions, owner and group
+  file: path={{ prometheus_node_exporter_daemon_dir }}/node_exporter owner={{ prometheus_usxxx }} group={{ prometheus_group }} mode="go-w"
+
+- name: mkdir for data
+  file:
+    path: "{{ prometheus_db_path }}"
+    state: directory
+    owner: "{{ prometheus_usxxx }}"
+    group: "{{ prometheus_group }}"
+    mode: "u=rwx,g=rx,o="
+
+- name: set node_exporter variables
+  copy: src="../files/etc-default-node_exporter"  dest=/etc/default/node_exporter
+  register: node_exporter_config
+
+- debug: var=node_exporter_config
+  notify: reload node_exporter
+  when: node_exporter_config.changed
+
+
+- name: copy systemd config to server
+  template: src="../templates/node_exporter.service.j2"  dest="/usr/lib/systemd/system/node_exporter.service"
+  when: ansible_distribution_major_version == "7"
+
+- name: just force systemd to reread configs
+  systemd:
+    daemon_reload: yes
+  when: ansible_distribution_major_version == "7"
+
+
+- name: set SYSTEMD status and start
+  service: name=node_exporter enabled=yes state=started
+  when: ansible_distribution_major_version == "7"
+
+- name: copy systemd config to server
+  template: 
+   src: "../templates/node_exporter.service6.j2"
+   dest: "/etc/init.d/node_exporter"
+   owner: "{{ prometheus_usxxx }}"
+   group: "{{ prometheus_group }}"
+   mode: "u=rwx,g=rx,o="
+  when: ansible_distribution_major_version == "6"
+
+
+- name: set INIT status and start
+  service: name=node_exporter enabled=yes state=started
+  when: ansible_distribution_major_version == "6"
+
+- name: set permissions, owner and group
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ prometheus_usxxx }}"
+    group: "{{ prometheus_group }}"
+    mode: "go-w"
+    recurse: yes
+  with_items:
+    - "{{ prometheus_config_path }}"
+    - "{{ prometheus_install_path }}"
+    - "{{ prometheus_db_path }}"
+
+- name: Check if node exporter emits metrices
+  uri:
+    url: http://127.0.0.1:9100/metrics
+    method: GET
+    status_code: 200
+install_process_exporter.yml
+---
+
+- name: create Prometheus group
+  group: name={{ prometheus_group }}  state=present
+
+- name: create Prometheus usxxx
+  usxxx:
+    name: "{{ prometheus_usxxx }}"
+    group: "{{ prometheus_group }}"
+    createhome: no
+    shell: /sbin/nologin
+    comment: "Prometheus Usxxx"
+    state: present
+
+- name: Set rpm file name
+  set_fact:
+    process_exporter_rpm_name: process-exporter_{{ process_exporter_version }}_{{ process_exporter_platform_suffix }}.rpm
+
+- name: Copy rpm to server
+  copy:
+    src: files/{{ process_exporter_rpm_name }}
+    dest: /tmp
+
+- name: Install process-exporter rpm
+  yum:
+    name: /tmp/{{ process_exporter_rpm_name }}
+    state: present
+
+
+#- name: Remove rpm file
+#  file:
+#    path: /tmp/{{ process_exporter_rpm_name }}
+#    state: absent
+
+- name: set permissions, owner and group
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ prometheus_usxxx }}"
+    group: "{{ prometheus_group }}"
+    mode: "go-w"
+    recurse: yes
+  with_items:
+    - "{{ process_exporter_config_path }}"
+
+- name: copy systemd config to server
+  copy: src="../templates/process-exporter.service.j2"  dest="/usr/lib/systemd/system/process-exporter.service"
+  when: ansible_distribution_major_version == "7"
+
+- name: just force systemd to reread configs
+  systemd:
+    daemon_reload: yes
+  when: ansible_distribution_major_version == "7"
+
+- name: set SYSTEMD status and start
+  service: name=process-exporter enabled=yes state=started
+  when: ansible_distribution_major_version == "7"
+
+- name: copy systemd config to server
+  template:
+   src: "../templates/process-exporter.service6.j2"
+   dest: "/etc/init.d/process-exporter"
+   owner: "{{ prometheus_usxxx }}"
+   group: "{{ prometheus_group }}"
+   mode: "u=rwx,g=rx,o="
+  when: ansible_distribution_major_version == "6"
+
+- name: restart
+  service: name=process-exporter  state=restarted
+
+
+- name: set INIT status and start
+  service: name=process-exporter enabled=yes state=started
+  when: ansible_distribution_major_version == "6"
+
+- name: Check if node exporter emits metrices
+  uri:
+    url: http://127.0.0.1:9256/metrics
+    method: GET
+    status_code: 200
+prometheus_config.yml
+---
+- block:
+  - name: print vm_name_fqdn
+    debug:
+      msg: "{{ item.vm_name_fqdn }}"
+    with_items: "{{ targets }}"
+
+  - name: Generate Prometheus hosts file
+    template:
+      src: prometheus_hosts.j2
+      dest: /etc/prometheus/tgroups/hosts/{{ item.vm_name_fqdn }}_sd.yml
+    with_items: "{{ targets }}"
+
+  - name: Generate Prometheus process file
+    template:
+      src: prometheus_process.j2
+      dest: /etc/prometheus/tgroups/process/{{ item.vm_name_fqdn }}_sd.yml
+    with_items: "{{ targets }}"
+
+  - name: Change file ownership, group and permissions
+    file:
+      path: /etc/prometheus/tgroups/hosts/{{ item.vm_name_fqdn }}_sd.yml
+      owner: prometheus
+      group: prometheus
+      mode: '0600'
+    with_items: "{{ targets }}"
+
+  - name: Change file ownership, group and permissions
+    file:
+      path: /etc/prometheus/tgroups/process/{{ item.vm_name_fqdn }}_sd.yml
+      owner: prometheus
+      group: prometheus
+      mode: '0600'
+    with_items: "{{ targets }}"
+
+  - name: Pxx prometheus_install var
+    set_stats:
+      data:
+        prometheus_install: "{{ prometheus_install }}"
+
+  rescue:
+    - debug: msg="Failed to add VM to prometheus config"
+    - set_fact:
+        prometheus_install: 'no'
+
+    - name: Pxx prometheus_install var
+      set_stats:
+        data:
+          prometheus_install: "{{ prometheus_install }}"
