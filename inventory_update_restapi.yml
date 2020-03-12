@@ -1,0 +1,11 @@
+- name: inventory > trigger update of the inventory source
+  uri:
+    url: "Error! Hyperlink reference not valid."
+    method: POST
+    validate_certs: no
+    usxxx: admin
+    paxxxx: "{{ ansible_admin_paxxxx }}"
+    force_basic_auth: yes
+    status_code: 200,201,202
+    timeout: 60
+  with_items: "{{ inv_source_id }}"
