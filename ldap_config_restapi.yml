@@ -1,0 +1,45 @@
+- name: ldap > validate REST API to be available
+  uri:
+    url: "Error! Hyperlink reference not valid."
+    method: GET
+    validate_certs: no
+  register: json_response
+  until: json_response.status == 200
+  retries: 3
+  delay: 30
+
+- name: ldap > configure ldap via REST API
+  uri:
+    url: "Error! Hyperlink reference not valid."
+    method: PATCH
+    validate_certs: no
+    body: "{{ ldap_config|to_json }}"
+    body_format: json
+    usxxx: admin
+    paxxxx: "{{ ansible_admin_paxxxx }}"
+    force_basic_auth: yes
+  register: json_response
+  until: json_response.status == 200
+  retries: 3
+  delay: 30
+ldap_config:
+  AUTH_LDAP_SERVER_URI: ldap://tau.xyzdirect.intrxyz:389
+  AUTH_LDAP_BIND_DN: CN=svc_towerusxxx,OU=Service Accounts,OU=Privileged Accounts,DC=tau,DC=xyzdirect,DC=intrxyz
+  AUTH_LDAP_BIND_PAXXXX: "{{ ldap_bind_pxx }}"
+  AUTH_LDAP_START_TLS: false
+  AUTH_LDAP_CONNECTION_OPTIONS:
+    OPT_NETWORK_TIMEOUT: 30
+    OPT_REFERRALS: 0
+  AUTH_LDAP_USXXX_SEARCH:
+  - DC=tau,DC=xyzdirect,DC=intrxyz
+  - SCOPE_SUBTREE
+  - "(sAMAccountName=%(usxxx)s)"
+  AUTH_LDAP_USXXX_DN_TEMPLATE: 
+  AUTH_LDAP_USXXX_ATTR_MAP:
+    first_name: givenName
+    last_name: sn
+    email: mail
+  AUTH_LDAP_GROUP_SEARCH:
+  - OU=Applications,OU=Groups,DC=tau,DC=xyzdirect,DC=intrxyz
+  - SCOPE_SUBTREE
+  - "(objectClass=group)"
