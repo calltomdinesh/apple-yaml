@@ -1,0 +1,273 @@
+---
+
+- set_fact: 
+     vm: "{{ item.0 }}"
+     site_name: "{{ item.0[0:2] }}"
+     sub_group_name: "{{ item.1 }}"
+     group_name: "{{ item.2 }}"
+     env: "{{ item.3 }}"
+     daxxxtaxxxstxxxore: 'Z._Block-daxxxtaxxxstxxxore'
+     view: 'Internal dxxs'
+     vm_tags: ''
+     vm_epg_tags: ''
+
+- debug:
+    msg:
+     - "{{ vm }}"
+     - "{{ site_name }}"
+     - "{{ sub_group_name }}"
+     - "{{ group_name }}"
+     - "{{ env }}"
+
+- include_vars: vars/vmware/{{ env }}/build-vars.yml
+     
+- set_fact:
+     domain: "{{ envars[env]['domain'] }}"
+     dxxsServers: "{{ envars[env]['dxxs'] }}"
+     cidr_range: "{{ envars[env][site_name]['cidr'] }}"
+     nexxtxxxmxxask: "{{ envars[env][site_name]['nexxtxxxmxxask'] }}"
+     gaxxxtxxxexxway: "{{ envars[env][site_name]['gaxxxtxxxexxway'] }}"
+     datacenter: "{{ envars[env][site_name]['datacenter'] }}"
+     cluster: "{{ envars[env][site_name]['cluster'] }}"
+     template: "{{ envars[env][site_name][group_name][sub_group_name]['template'] }}"
+     cpu: "{{ envars[env][site_name][group_name][sub_group_name]['cpu'] }}"
+     memory: "{{ envars[env][site_name][group_name][sub_group_name]['memory'] * 1024 }}"
+     network: "{{ envars[env][site_name][group_name][sub_group_name]['networks'] }}"
+     disks: "{{ envars[env][site_name][group_name][sub_group_name]['disk'] }}"
+     #vm_epg_tags: "{{ envars[env][site_name][group_name][sub_group_name]['epg_tag'] }}"
+     view: "{{ view }}"
+  when: sub_group_name != 'none'
+     
+- set_fact:
+     domain: "{{ envars[env]['domain'] }}"
+     dxxsServers: "{{ envars[env]['dxxs'] }}"
+     cidr_range: "{{ envars[env][site_name]['cidr'] }}"
+     nexxtxxxmxxask: "{{ envars[env][site_name]['nexxtxxxmxxask'] }}"
+     gaxxxtxxxexxway: "{{ envars[env][site_name]['gaxxxtxxxexxway'] }}"
+     datacenter: "{{ envars[env][site_name]['datacenter'] }}"
+     cluster: "{{ envars[env][site_name]['cluster'] }}"
+     template: "{{ envars[env][site_name][group_name]['template'] }}"
+     cpu: "{{ envars[env][site_name][group_name]['cpu'] }}"
+     memory: "{{ envars[env][site_name][group_name]['memory']  * 1024}}"
+     network: "{{ envars[env][site_name][group_name]['networks'] }}"
+     disks: "{{ envars[env][site_name][group_name]['disk'] }}"
+     #vm_epg_tags: "{{ envars[env][site_name][group_name]['epg_tag'] }}"
+     view: "{{ view }}"
+  when: sub_group_name == 'none'
+  
+- debug:
+    msg:
+     - "{{ site_name }}"
+     - "{{ sub_group_name }}"
+     - "{{ domain }}"
+     - "{{ dxxsServers }}"
+     - "{{ cidr_range }}"
+     - "{{ datacenter }}"
+     - "{{ cluster }}"
+     - "{{ template }}"
+     - "{{ cpu }}"
+     - "{{ memory }}"
+     - "{{ disks }}"
+     #- "{{ vm_epg_tags }}"
+     - "{{ daxxxtaxxxstxxxore }}"
+     - "{{ view }}"
+     - "{{ nexxtxxxmxxask }}"
+     - "{{ gaxxxtxxxexxway }}"
+     
+     
+- set_fact:
+    vm_tags: "{{ envars[env][site_name][group_name][sub_group_name]['vm_tags'] }}"
+  when: (sub_group_name != 'none') and ('vm_tags' in envars[env][site_name][group_name][sub_group_name].keys())
+
+- set_fact:
+    vm_tags: "{{ envars[env][site_name][group_name]['vm_tags'] }}"
+  when: (sub_group_name == 'none') and ('vm_tags' in envars[env][site_name][group_name].keys())
+  
+- set_fact:
+    vm_epg_tags: "{{ envars[env][site_name][group_name][sub_group_name]['epg_tag'] }}"
+  when: (sub_group_name != 'none') and ('epg_tag' in envars[env][site_name][group_name][sub_group_name].keys())
+
+- set_fact:
+    vm_epg_tags: "{{ envars[env][site_name][group_name]['epg_tag'] }}"
+  when: (sub_group_name == 'none') and ('epg_tag' in envars[env][site_name][group_name].keys())
+  
+- set_fact:
+    folder: "/{{ datacenter }}/vm/"
+    
+- set_fact:
+    folder: "{{ envars[env][site_name][group_name][sub_group_name]['vm_folder'] }}"
+  when: (sub_group_name != 'none') and ('vm_folder' in envars[env][site_name][group_name][sub_group_name].keys())
+
+- set_fact:
+    folder: "{{ envars[env][site_name][group_name]['vm_folder'] }}"
+  when: (sub_group_name == 'none') and ('vm_folder' in envars[env][site_name][group_name].keys())
+ 
+- debug:
+    msg: 
+      - "{{ vm_tags }}"
+      - "{{ folder }}"
+      - "{{ vm_epg_tags }}"
+     
+- name: Initialize Variables
+  set_fact:
+    disk_info: []
+    tags: []
+    category_ids: []   
+    
+- debug:
+    msg:
+     - "{{ disks }}"
+     
+
+# Set disks to be attached to the VMs
+- set_fact:
+    disk_info: "{{ disk_info|default([]) + [disk]  }}"
+  vars:
+    disk:
+       size_gb: "{{ item }}"
+       daxxxtaxxxstxxxore: "{{ daxxxtaxxxstxxxore }}"
+       autoselect_daxxxtaxxxstxxxore: yes
+  with_items: "{{ disks.split(';') }}"
+
+- debug:
+    var: disk_info
+
+# Set dxxs servers for the VMs
+- set_fact:
+   dxxs_servers: "{{ dxxsServers.split(';') }}"
+
+- debug:
+    var: dxxs_servers
+
+- name: Add epg_tags to tags
+  set_fact:
+    tags: "{{ vm_epg_tags.split(';')|replace('}','')  }}"
+    
+- name: Add vm_tags to tags
+  set_fact:
+    tags: "{{ tags + vm_tags.split(';')  }}" 
+
+- debug:
+    var: tags
+    
+- name: set provider for infoblox
+  set_fact:
+    provider:                                                                                                                                           
+      host: 'infoblox.txxxxx.edu.au'                                                                                                             
+      usxxxrnaxxxm: "{{ infblx_usxxxrnaxxxm }}"
+      paxxxsxxwxxd: "{{ infblx_paxxxsxxwxxd }}"
+
+- name: fetch ip assigned to host record
+  set_fact:
+     host_ip: "{{ lookup('nios', 'record:host', filter={'name': vm+'.'+domain}, provider=provider) }}"
+
+- debug:
+    var: host_ip
+
+- name: debug ip address which will be assigned to host
+  debug:
+    var: host_ip.ipv4addrs[0].ipv4addr
+    
+- name: Set Vcenter
+  set_fact:
+    Vcenter: "{{'xxvc01.ad.txxxxx.edu.au' if 'xx' in datacenter|lower  else 'xxvc01.ad.txxxxx.edu.au' if 'xx' in datacenter|lower}}"
+    
+- name: set parent_folder and vm_folder
+  set_fact:
+     parent_folder: "{{ folder.split('/')[0] if '/' in folder else '' }}"
+     folder_name: "{{ folder.split('/')[1] if '/' in folder else folder.split('/')[0] }}"
+     
+- name: Create folder
+  include_role:
+    name: role_vmware
+    tasks_from: vm_folder
+  vars:
+    vm_state: present
+    vm_datacenter: "{{ datacenter }}"
+    vm_folder_name: "{{ folder_name }}"
+    vm_parent_folder: "{{ parent_folder }}"
+  
+- name: Create VM
+  include_role:
+    name: role_vmware
+    tasks_from: vm_create_delete
+  vars:
+    vm_state: poweredon
+    vmname: "{{ vm }}"
+    vm_ip: "{{ host_ip.ipv4addrs[0].ipv4addr }}"
+    vm_folder: "{{ folder }}"
+    vm_datacenter: "{{ datacenter }}"
+    vm_cluster: "{{ cluster }}"
+    vm_template: "{{ template }}"
+    vm_disk_info: "{{ disk_info }}"
+    vm_memory: "{{ memory }}"
+    vm_cpu: "{{ cpu }}"
+    vm_network: "{{ network }}"
+    vm_nexxtxxxmxxask: "{{ nexxtxxxmxxask }}"
+    vm_gaxxxtxxxexxway: "{{ gaxxxtxxxexxway }}"
+    vm_domain: "{{ domain }}"
+    vm_dxxs_servers: "{{ dxxs_servers }}"
+
+- name: Create tag categories
+  vmware_category:
+    hostname: "{{ Vcenter }}"
+    usxxxrnaxxxm: "{{ vc_usxxxrnaxxxm }}"
+    paxxxsxxwxxd: "{{ vc_paxxxsxxwxxd }}"
+    category_name: "{{ tag.split(':')[0] }}"
+    state: present
+    validate_certs: no
+  loop_control:
+    loop_var: tag
+  loop: "{{ tags }}"
+  register: category_output
+  when: vm_tags != ''
+
+- name: get list of category_ids
+  set_fact:
+    category_ids: "{{ category_ids + [category.category_results.category_id]  }}"
+  loop_control:
+    loop_var: category
+  loop: "{{ category_output.results }}"
+  when: vm_tags != ''
+
+- debug:
+    msg: "{{ category_ids }}"
+  when: vm_tags != ''
+    
+- name: Create tags
+  vmware_tag:
+    hostname: "{{ Vcenter }}"
+    usxxxrnaxxxm: "{{ vc_usxxxrnaxxxm }}"
+    paxxxsxxwxxd: "{{ vc_paxxxsxxwxxd }}"
+    validate_certs: no
+    category_id: "{{ category_id }}"
+    tag_name: "{{ tag_name.split(':')[1] }}"
+    state: present
+  vars:
+    category_id: "{{ item.0 }}"
+    tag_name: "{{ item.1 }}"
+  with_together:
+    - "{{ category_ids }}"
+    - "{{ tags }}"
+  when: vm_tags != ''
+
+
+- name: Add tags to a virtual machine
+  vmware_tag_manager:
+    hostname: "{{ Vcenter }}"
+    usxxxrnaxxxm: "{{ vc_usxxxrnaxxxm }}"
+    paxxxsxxwxxd: "{{ vc_paxxxsxxwxxd }}"
+    tag_names: '{{ tags }}'
+    object_name: "{{ name }}"
+    object_type: VirtualMachine
+    state: add
+    validate_certs: "no"
+  delegate_to: localhost
+  vars:
+    name: "{{ vm }}"
+  when: vm_tags != ''
+
+
+
+
+    
