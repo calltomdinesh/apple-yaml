@@ -1,0 +1,122 @@
+- hosts: localhost
+  gather_facts: no
+
+  vars_files:
+    - vars/sexxcxxrexxxts.yml
+    
+  tasks:
+
+  - shell: cat vars/vmware/vmdata.csv
+    register: vmdata
+
+  - debug:
+      msg: "{{ vmdata.stdout_lines }}"
+
+  - set_fact:
+      vms: "{{ vms|default([]) + [item.split(',')[0]]  }}"
+      env: "{{ env|default([]) + [item.split(',')[2]]  }}"
+    when: ('name' not in item)
+    with_items: "{{ vmdata.stdout_lines }}"
+
+  - include: create_infoblox_records.yml
+    vars:
+      vmname: "{{ item.0 }}"
+      envmnt: "{{ item.1 }}"
+    with_together:
+      - "{{ vms }}"
+      - "{{ env }}"
+
+-------------------------------------------------------------------------------
+---
+
+- set_fact: 
+     vm: "{{ vmname }}"
+     site_name: "{{ vmname[0:2] }}"
+     env: "{{ envmnt }}"
+     view: 'Internal dnxxxsx'
+     api_version: 'v2.6'
+     infoblox_provider: 'infoblox.tfxxxnsxxwxxx.edu.au'
+     
+
+- debug:
+    msg:
+     - "{{ vm }}"
+     - "{{ site_name }}"
+     - "{{ env }}"
+
+- include_vars: vars/vmware/{{ env }}/build-vars.yml
+
+     
+- set_fact:
+     domain: "{{ envars[env]['domain'] }}"
+     cidr_range: "{{ envars[env][site_name]['cidr'] }}"
+     view: "{{ view }}"
+     ip_start: "{{ envars[env][site_name]['infblx_ip_start'] }}"
+     ip_end: "{{ envars[env][site_name]['infblx_ip_end'] }}"
+  
+- debug:
+    msg:
+     - "{{ domain }}"
+     - "{{ cidr_range }}"
+     - "{{ view }}"
+     
+- name: Retrieve free ips list
+  uri:
+    url: "https://{{ infoblox_provider }}/wapi/{{ api_version }}/ipv4address?ip_address>={{ ip_start }}&ip_address<={{ ip_end }}&status=UNUSED"
+    user: "{{ infblx_usxxxrxxxnmxxx }}"
+    psxxxwxxxrd: "{{ infblx_psxxxwxxxrd }}"
+    method: GET
+    force_basic_auth: yes
+    status_code: 200
+    body_format: json
+    validate_certs: no
+  register: ip_result
+  
+- set_fact:
+    free_ips: []
+    
+- set_fact:
+    free_ips: "{{ free_ips|default([]) + [unusedip.ip_address]  }}"
+  vars:
+       unusedip: "{{ item  }}"
+  with_items: "{{ ip_result.json }}"
+  
+- name: Print free ips returned
+  debug:
+    msg: "{{ free_ips }}"
+
+
+- name: Get the next available ip
+  set_fact:
+    ipaddrs: "{{ free_ips[0] }}"
+
+- debug:
+    var: ipaddrs
+
+# Create host records in Infoblox
+- name: Create host record
+  include_role:
+    name: role_infoblox
+    tasks_from: create_delete_infoblox_records
+  vars:
+    record_state: present
+    record_type: host
+    vm_name: "{{ vm }}"
+    vm_ip: "{{ ipaddrs }}"
+    vm_domain: "{{ envars[env]['domain'] }}"
+    vm_view: "{{ view }}"
+
+
+    
+
+
+
+
+    
+
+
+  
+
+
+
+  
